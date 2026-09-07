@@ -215,12 +215,14 @@ class PromptEditorController {
       type: "text",
       placeholder: "Find",
       spellcheck: "false",
+      autocomplete: "off",
       "aria-label": "Find",
     });
     this.replaceInput = el("input", {
       type: "text",
       placeholder: "Replace",
       spellcheck: "false",
+      autocomplete: "off",
       "aria-label": "Replace",
     });
     this.caseBox = el("input", { type: "checkbox", "aria-label": "Case sensitive" });
@@ -270,8 +272,21 @@ class PromptEditorController {
       this.footerEl,
     ]);
 
-    this.btnFind.addEventListener("click", () => this.openSearch(false));
-    this.btnReplace.addEventListener("click", () => this.openSearch(true));
+    for (const btn of [
+      this.btnFind,
+      this.btnReplace,
+      this.btnCopy,
+      this.btnPrev,
+      this.btnNext,
+      this.btnDoReplace,
+      this.btnReplaceAll,
+      this.btnLastManual,
+      this.btnLastLlm,
+    ]) {
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
+    }
+    this.btnFind.addEventListener("click", () => this.toggleSearch(false));
+    this.btnReplace.addEventListener("click", () => this.toggleSearch(true));
     this.btnCopy.addEventListener("click", () => this.copyDisplayed());
     this.btnLastManual.addEventListener("click", () => this.toggleHistory(VIEW.LAST_MANUAL));
     this.btnLastLlm.addEventListener("click", () => this.toggleHistory(VIEW.LAST_LLM));
@@ -279,11 +294,18 @@ class PromptEditorController {
     this.btnNext.addEventListener("click", () => this.gotoMatch(1));
     this.btnDoReplace.addEventListener("click", () => this.replaceCurrent());
     this.btnReplaceAll.addEventListener("click", () => this.replaceAll());
-    this.findInput.addEventListener("input", () => this.recomputeMatches(true));
-    this.caseBox.addEventListener("change", () => this.recomputeMatches(true));
-    this.wordBox.addEventListener("change", () => this.recomputeMatches(true));
+    this.findInput.addEventListener("input", () => this.recomputeMatches(true, { select: false }));
+    this.caseBox.addEventListener("change", () => this.recomputeMatches(true, { select: false }));
+    this.wordBox.addEventListener("change", () => this.recomputeMatches(true, { select: false }));
     this.findInput.addEventListener("keydown", (e) => this._onFindKey(e));
     this.replaceInput.addEventListener("keydown", (e) => this._onFindKey(e));
+    for (const field of [this.findInput, this.replaceInput]) {
+      field.addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
+        field.focus();
+      });
+      field.addEventListener("mousedown", (e) => e.stopPropagation());
+    }
 
     this.textarea.addEventListener("input", () => this._onEditorInput());
     this.textarea.addEventListener("dblclick", () => this._onEditorDblClick());
@@ -439,7 +461,7 @@ class PromptEditorController {
       setWidgetValue(this.node, "last_llm_input", value);
     }
     this._updateFooter();
-    if (this.searchOpen) this.recomputeMatches(false);
+    if (this.searchOpen) this.recomputeMatches(false, { select: false });
     this.node.setDirtyCanvas?.(true, true);
   }
 
@@ -478,11 +500,15 @@ class PromptEditorController {
   _onFindKey(e) {
     if (e.key === "Enter") {
       e.preventDefault();
-      this.gotoMatch(e.shiftKey ? -1 : 1);
+      if (e.target === this.replaceInput && this.isEditable() && !e.shiftKey) {
+        this.replaceCurrent({ keepSearchFocus: true });
+      } else {
+        this.gotoMatch(e.shiftKey ? -1 : 1);
+      }
     } else if (e.key === "Escape") {
       e.preventDefault();
       this.closeSearch();
-      this.textarea.focus();
+      if (this.isEditable()) this.textarea.focus();
     }
   }
 
@@ -495,7 +521,7 @@ class PromptEditorController {
       this.historyUnlocked = false;
     }
     this._writeEditor(this.displayedText());
-    if (this.searchOpen) this.recomputeMatches(true);
+    if (this.searchOpen) this.recomputeMatches(true, { select: false });
     this.render();
   }
 
@@ -514,16 +540,25 @@ class PromptEditorController {
     this.render();
   }
 
+  toggleSearch(withReplace) {
+    const wantReplace = !!withReplace;
+    if (this.searchOpen && this.replaceOpen === wantReplace) {
+      this.closeSearch();
+      return;
+    }
+    this.openSearch(wantReplace);
+  }
+
   openSearch(withReplace) {
     this.searchOpen = true;
     this.replaceOpen = !!withReplace;
     this.searchEl.classList.add("is-open");
-    this.replaceRow.style.display = this.replaceOpen ? "flex" : "none";
+    this._updateSearchChrome();
     this._fitEditor();
-    this.recomputeMatches(true);
-    this.findInput.focus();
-    this.findInput.select();
-    this._updateReplaceEnabled();
+    this.recomputeMatches(true, { select: false });
+    const focusEl = this.replaceOpen && this.findInput.value ? this.replaceInput : this.findInput;
+    focusEl.focus();
+    if (focusEl === this.findInput) this.findInput.select();
   }
 
   closeSearch() {
@@ -532,21 +567,30 @@ class PromptEditorController {
     this.searchEl.classList.remove("is-open");
     this.matches = [];
     this.matchIndex = -1;
+    this._updateSearchChrome();
     this._fitEditor();
   }
 
-  recomputeMatches(resetIndex) {
+  _updateSearchChrome() {
+    this.replaceRow.style.display = this.searchOpen && this.replaceOpen ? "flex" : "none";
+    this.btnFind.classList.toggle("is-active", this.searchOpen && !this.replaceOpen);
+    this.btnReplace.classList.toggle("is-active", this.searchOpen && this.replaceOpen);
+    this._updateReplaceEnabled();
+  }
+
+  recomputeMatches(resetIndex, opts = {}) {
+    const select = !!opts.select;
     const query = this.findInput.value;
     this.matches = findMatches(this.textarea.value, query, this.caseBox.checked, this.wordBox.checked);
     if (resetIndex) this.matchIndex = this.matches.length ? 0 : -1;
     else if (this.matchIndex >= this.matches.length) this.matchIndex = this.matches.length - 1;
     this._updateMatchUi();
-    if (this.matchIndex >= 0) this._selectMatch(this.matchIndex);
+    if (select && this.matchIndex >= 0) this._selectMatch(this.matchIndex);
   }
 
   gotoMatch(delta) {
     if (!this.matches.length) {
-      this.recomputeMatches(true);
+      this.recomputeMatches(true, { select: true });
       return;
     }
     this.matchIndex = (this.matchIndex + delta + this.matches.length) % this.matches.length;
@@ -558,7 +602,7 @@ class PromptEditorController {
     const pair = this.matches[index];
     if (!pair) return;
     const [start, end] = pair;
-    this.textarea.focus();
+    this.textarea.focus({ preventScroll: true });
     this.textarea.setSelectionRange(start, end);
   }
 
@@ -573,7 +617,18 @@ class PromptEditorController {
     const allowed = this.isEditable() && this.replaceOpen;
     this.btnDoReplace.disabled = !allowed;
     this.btnReplaceAll.disabled = !allowed;
-    this.replaceInput.disabled = !allowed;
+    this.replaceInput.disabled = false;
+    this.replaceInput.readOnly = false;
+    let why = "Replacement text";
+    if (this.replaceOpen && !this.isEditable()) {
+      why =
+        this.viewMode === VIEW.CURRENT
+          ? "Replace is unavailable while a connected STRING is the active value. Find still works."
+          : "Double-click the editor to unlock this history copy before replacing.";
+    }
+    this.replaceInput.title = why;
+    this.btnDoReplace.title = why;
+    this.btnReplaceAll.title = why;
   }
 
   _replaceRange(start, end, replacement) {
@@ -596,13 +651,14 @@ class PromptEditorController {
     }
   }
 
-  replaceCurrent() {
+  replaceCurrent(opts = {}) {
     if (!this.isEditable()) return;
-    if (!this.matches.length) this.recomputeMatches(true);
+    if (!this.matches.length) this.recomputeMatches(true, { select: false });
     if (!this.matches.length) return;
     const [start, end] = this.matches[this.matchIndex] || this.matches[0];
     this._replaceRange(start, end, this.replaceInput.value);
-    this.recomputeMatches(false);
+    this.recomputeMatches(false, { select: !opts.keepSearchFocus });
+    if (opts.keepSearchFocus) this.replaceInput.focus();
   }
 
   replaceAll() {
@@ -658,6 +714,7 @@ class PromptEditorController {
 
     this.btnLastManual.classList.toggle("is-history-active", this.viewMode === VIEW.LAST_MANUAL);
     this.btnLastLlm.classList.toggle("is-history-active", this.viewMode === VIEW.LAST_LLM);
+    this._updateSearchChrome();
 
     if (this.viewMode !== VIEW.CURRENT && !editable) {
       this.textarea.title = "History is read-only. Double-click to unlock editing of this stored copy.";

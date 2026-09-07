@@ -93,8 +93,11 @@ Button **Find**, or **Ctrl+F**.
 - Search the currently displayed text (CURRENT, Last Manual, or Last LLM)
 - Next / Previous, match counter (`3 / 12`)
 - Enter = next, Shift+Enter = previous, Esc closes
+- Click Find again (or Esc) to close the find bar
+- Typing in Find or the editor only updates the match count; it does not steal the caret. Use Next/Prev or Enter to jump to a match
 - Optional Case Sensitive and Whole Word
 - Search never modifies text
+- Opening Find / Find & Replace does not lock the editor. Read-only still applies only to Last Manual / Last LLM until you double-click to unlock history editing.
 
 ## Find & Replace
 
