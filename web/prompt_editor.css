@@ -1,0 +1,190 @@
+.xai-pe {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 140px;
+  gap: 4px;
+  padding: 2px 0 0 0;
+  color: var(--input-text, var(--fg-color, #ddd));
+  font-family: var(--font-family, inherit);
+  font-size: 12px;
+  pointer-events: auto;
+}
+
+.xai-pe *,
+.xai-pe *::before,
+.xai-pe *::after {
+  box-sizing: border-box;
+}
+
+.xai-pe-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-height: 22px;
+}
+
+.xai-pe-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 7px;
+  border: 1px solid var(--border-color, #4e4e4e);
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 16px;
+  user-select: none;
+  pointer-events: none;
+  cursor: default;
+  flex: 0 0 auto;
+}
+
+.xai-pe-status[data-mode="MANUAL"] {
+  background: color-mix(in srgb, var(--input-text, #ddd) 10%, transparent);
+  color: var(--input-text, var(--fg-color, #ddd));
+}
+
+.xai-pe-status[data-mode="LLM"] {
+  background: color-mix(in srgb, #6a9a5b 28%, transparent);
+  color: var(--input-text, var(--fg-color, #ddd));
+}
+
+.xai-pe-btn {
+  appearance: none;
+  background: color-mix(in srgb, var(--comfy-input-bg, var(--comfy-menu-bg, #353535)) 88%, transparent);
+  color: var(--input-text, var(--fg-color, #ddd));
+  border: 1px solid var(--border-color, #4e4e4e);
+  border-radius: 3px;
+  padding: 1px 7px;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.xai-pe-btn:hover {
+  background: color-mix(in srgb, var(--input-text, #ddd) 10%, transparent);
+}
+
+.xai-pe-btn:focus-visible {
+  outline: 1px solid var(--border-color, #888);
+  outline-offset: 1px;
+}
+
+.xai-pe-btn.is-history-active {
+  background: color-mix(in srgb, var(--input-text, #ddd) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--input-text, #ddd) 35%, transparent);
+}
+
+.xai-pe-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.xai-pe-search {
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--border-color, #4e4e4e);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--comfy-menu-bg, #2a2a2a) 80%, transparent);
+  flex: 0 0 auto;
+}
+
+.xai-pe-search.is-open {
+  display: flex;
+}
+
+.xai-pe-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.xai-pe-search input[type="text"] {
+  flex: 1 1 120px;
+  min-width: 80px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border-color, #4e4e4e);
+  border-radius: 3px;
+  background: var(--comfy-input-bg, #1e1e1e);
+  color: var(--input-text, #ddd);
+  font-size: 11px;
+}
+
+.xai-pe-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--descrip-text, #aaa);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.xai-pe-count {
+  font-size: 10px;
+  color: var(--descrip-text, #aaa);
+  min-width: 42px;
+  text-align: right;
+}
+
+.xai-pe-editor-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 80px;
+  display: flex;
+}
+
+.xai-pe-textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 80px;
+  resize: none;
+  border: 1px solid var(--border-color, #4e4e4e);
+  border-radius: 3px;
+  padding: 6px 8px;
+  background: var(--comfy-input-bg, #1e1e1e);
+  color: var(--input-text, var(--fg-color, #ddd));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow: auto;
+  tab-size: 4;
+}
+
+.xai-pe-textarea:focus {
+  outline: 1px solid color-mix(in srgb, var(--border-color, #888) 70%, transparent);
+  outline-offset: 0;
+}
+
+.xai-pe-textarea.is-readonly {
+  opacity: 0.78;
+  cursor: text;
+}
+
+.xai-pe-textarea.is-history-unlocked {
+  opacity: 1;
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--input-text, #ddd) 35%, transparent);
+}
+
+.xai-pe-footer {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--descrip-text, #888);
+  padding: 0 2px;
+  user-select: none;
+}
