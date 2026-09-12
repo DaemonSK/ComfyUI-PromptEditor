@@ -12,9 +12,9 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/local/ComfyUI-PromptEditor"
+Repository = "https://github.com/DaemonSK/ComfyUI-PromptEditor"
 
 [tool.comfy]
-PublisherId = "local"
+PublisherId = "daemonsk"
 DisplayName = "Prompt Editor"
 requires-comfyui = ">=0.34.0"

@@ -1,187 +1,193 @@
 # Prompt Editor
 
-A ComfyUI custom node for writing and inspecting prompts.
+A ComfyUI node for **writing and inspecting prompts**.
 
-**Version:** 0.1.0 beta  
-**Displayed name:** Prompt Editor  
-**Category:** `utils/text`  
-**Internal id:** `XAI_PromptEditor`
+It is a real multiline editor (select, copy, undo, spellcheck), not a fake canvas text box. You can type a prompt by hand, or plug in any upstream STRING (local or cloud LLM) and switch between the two **without disconnecting the cable**.
 
-## Purpose
+**v0.1.0 beta** · MIT · no extra dependencies  
+Add node: **Prompt Editor** · category **utils/text**
 
-Use this node as a large, real text editor for prompts. It keeps three separate values:
+---
 
-- **current prompt** — the last active graph prompt
-- **last manual input** — the last prompt typed by hand
-- **last LLM input** — the last resolved connected STRING
+## Install
 
-The visible editor is not always the active graph output. History viewing never silently changes output.
+1. Clone into ComfyUI `custom_nodes`:
 
-## Installation
-
-Copy or junction this folder into your ComfyUI `custom_nodes` directory as `ComfyUI-PromptEditor`, then **restart ComfyUI**.
-
-This workspace is already junctioned to:
-
-`H:\Comfy\August - auto installer\Comfyui auto installer\custom_nodes\ComfyUI-PromptEditor`
-
-Restart the running ComfyUI process to load the node. Search **Prompt Editor** under `utils/text`.
-
-Example (Windows, from an elevated or Developer PowerShell):
-
-```powershell
-New-Item -ItemType Junction -Path "H:\path\to\ComfyUI\custom_nodes\ComfyUI-PromptEditor" -Target "D:\path\to\ComfyUI-PromptEditor"
+```bash
+cd ComfyUI/custom_nodes
+git clone https://github.com/DaemonSK/ComfyUI-PromptEditor.git
 ```
 
-No extra Python or npm packages are required.
+2. Restart ComfyUI.
+3. Add **Prompt Editor** from `utils/text`.
 
-## STRING input / output
+Nothing else to install.
 
-| | |
-|---|---|
-| Input | Optional connectable `STRING` named `text`. Any upstream text node counts, including a local LLM. |
-| Output | Standard ComfyUI `STRING` named `prompt`. Connect it to CLIP encode, samplers, or any STRING consumer. |
+---
 
-In **MANUAL** mode the output is the current prompt.  
-In **LLM** mode the output is the resolved upstream STRING after execution.
+## Quick start
 
-A connected cable does **not** force LLM mode. Click the MANUAL/LLM control to switch while keeping the cable.
+1. Drop **Prompt Editor** on the graph.
+2. Type a prompt. Connect the `prompt` output to anything that accepts STRING (CLIP encode, etc.).
+3. Optional: connect any STRING producer into the left `text` input (an LLM node, another editor, …).
+4. Queue the graph. When the upstream STRING resolves, it appears in the editor.
 
-## MANUAL vs LLM
+**Important:** the text you *see* is not always the text that *runs*. Peeking at history never changes the graph output unless you click **Use as current**. The footer always says what you are viewing vs what will run.
 
-The control is on the **far left** of the toolbar.
-
-| | |
-|---|---|
-| `MANUAL` (no light) | No STRING connected. Editing is local. |
-| `MANUAL` (hollow green dot) | Cable still connected, but output is your local text. Click to use LLM. |
-| `LLM` (filled green light) | Using the connected STRING. CURRENT is read-only. Click to edit locally without disconnecting. |
-
-`LLM` means “use the upstream text node.” It does **not** mean a cloud model.
-
-- Connect a cable → switches to LLM.
-- Disconnect → switches to MANUAL and keeps the last current text.
-- While connected, click the control to toggle. The cable stays.
-- Viewing Last Manual / Last LLM never changes this control.
+---
 
 ## Toolbar
 
 Left to right:
 
-`[ MANUAL/LLM ]`  Find  Find & Replace  Copy  Paste  Last Manual Input  Last LLM Input  Use as current
+`[ MANUAL / LLM ]`  Find  Find & Replace  Copy  Paste  Last Manual Input  Last LLM Input  Use as current
 
-## Last Manual Input
+### MANUAL / LLM
 
-Click once to view the stored last manual prompt. The editor is read-only at first. Status and graph output do not change. Click again to return to CURRENT. Disabled until you have actually stored a manual prompt.
+Clickable mode switch on the far left. It does **not** disconnect the cable.
 
-## Last LLM Input
+| Look | Meaning |
+|---|---|
+| **MANUAL** — no light | Nothing connected. You are writing the prompt that will run. |
+| **MANUAL** — hollow green dot | A STRING is still connected, but output is your local text. Click to use the LLM. |
+| **LLM** — filled green light | Output is the connected STRING. The live editor is read-only. Click to edit locally without unplugging. |
 
-Same behavior as Last Manual Input, for the stored last connected STRING. Disabled until an LLM STRING has been stored.
+- Plug in a cable → switches to **LLM** (light pulses when new text arrives).
+- Unplug → switches to **MANUAL** and **keeps** the last LLM text on screen.
+- History buttons never change this control.
 
-Only one history view can be active. The active history button gets a subtle highlight.
+`LLM` here means “any upstream text node,” not “cloud only.”
 
-**Esc** closes Find first; if Find is already closed, Esc leaves history and returns to CURRENT.
+### Find
 
-## Use as current
+Search the text currently on screen. Click again (or **Esc**) to close.
 
-While viewing Last Manual or Last LLM, **Use as current** makes that text the live prompt:
+- **Ctrl+F**
+- Next / Previous and a `3 / 12` counter
+- **Enter** = next, **Shift+Enter** = previous
+- Optional **Case** and **Word**
+- Search never edits the prompt
 
-- Switches to MANUAL (cable stays if connected)
+### Find & Replace
+
+**Ctrl+H**. Same search, plus Replace / Replace All.
+
+Replace works only when the text is editable (MANUAL current, or history you unlocked). In live **LLM** view, find still works; replace stays off so the connected STRING is not silently changed.
+
+### Copy
+
+Copies **exactly** what is on screen, including line breaks — even if you are only *viewing* history. Brief **✓ Copied**.
+
+### Paste
+
+Replaces the **whole** displayed text with the clipboard. Same edit rules as typing.
+
+| Action | Result |
+|---|---|
+| **Paste** or **Ctrl+Shift+V** | Replace everything (Ctrl+Z should undo) |
+| **Shift+click Paste** | Append at the end |
+| Drop a `.txt` file on the editor | Replace with the file |
+| Normal **Ctrl+V** | Insert at the caret |
+
+Disabled while live LLM text is locked, or while history is still read-only.
+
+### Last Manual Input
+
+Shows the last prompt you typed by hand. Read-only at first. Does **not** change output or the cable.
+
+Click again to go back to the live prompt. Greyed out until you have stored a manual prompt.
+
+### Last LLM Input
+
+Same idea, for the last connected STRING. Greyed out until an LLM value has been stored.
+
+Only one history view at a time. **Esc** closes Find first; if Find is already closed, Esc leaves history.
+
+### Use as current
+
+Appears only while you are in Last Manual or Last LLM.
+
+Means: *make this text the live prompt now.*
+
+- Switches to **MANUAL** (cable stays)
 - Graph output becomes that text
 - Last Manual is updated to match
 
-History still never changes output unless you click this.
+Until you click this, history is only a peek.
 
-## Double-click history editing
+---
 
-While viewing either history buffer, **double-click** the editor to unlock that stored copy for editing.
+## History editing
 
-- Editing Last Manual updates only `lastManualInput`
-- Editing Last LLM updates only `lastLLMInput`
-- The connected cable, current prompt, and graph output do **not** change
+While viewing Last Manual or Last LLM, **double-click** the editor to unlock that stored copy.
 
-Leaving history (click the same button again) locks it again.
+- You are editing the **history buffer**, not the live graph prompt
+- Output does not change
+- Leave history (same history button, **Use as current**, or **Esc**) to lock it again
 
-## Find
+---
 
-Button **Find**, or **Ctrl+F**.
+## Footer
 
-- Search the currently displayed text (CURRENT, Last Manual, or Last LLM)
-- Next / Previous, match counter (`3 / 12`)
-- Enter = next, Shift+Enter = previous, Esc closes
-- Click Find again (or Esc) to close the find bar
-- Typing in Find or the editor only updates the match count; it does not steal the caret. Use Next/Prev or Enter to jump to a match
-- Optional Case Sensitive and Whole Word
-- Search never modifies text
-- Opening Find / Find & Replace does not lock the editor. Read-only still applies only to Last Manual / Last LLM until you double-click to unlock history editing.
+Left: what you are looking at, and what the graph will output.
 
-## Find & Replace
+Examples:
 
-Button **Find & Replace**, or **Ctrl+H**.
+- `Editing current · Output is MANUAL`
+- `Viewing last manual · Output is LLM`
+- `Viewing current LLM · Output is LLM`
 
-Replace / Replace All are available only when the displayed text is editable:
+Right: `12 words · 80 chars` for the text on screen.
 
-- CURRENT + MANUAL
-- Unlocked history
+---
 
-They are unavailable in CURRENT connected-LLM view (the upstream STRING is authoritative) and in locked history. Find still works.
+## Shortcuts
 
-## Copy
+| Key | Action |
+|---|---|
+| **Ctrl+F** | Find |
+| **Ctrl+H** | Find & Replace |
+| **Ctrl+Shift+V** | Paste (replace all) |
+| **Esc** | Close Find, then leave history |
+| **Enter** / **Shift+Enter** | Next / previous match (in Find) |
 
-Copies **exactly** the text currently shown in the editor, including line breaks — even if that is a history view and the graph output is different. The button briefly shows `✓ Copied`.
+The editor is a normal textarea: Ctrl+A / C / X / V / Z, Home/End, native spelling suggestions (`lang=en`). Text is never auto-trimmed or rewritten.
 
-## Paste
+---
 
-Replaces the **entire displayed** buffer with the clipboard, exact text. Same editability rules as typing (CURRENT MANUAL, or unlocked history). Disabled in CURRENT LLM mode and locked history.
+## How the three texts relate
 
-- Click **Paste** or **Ctrl+Shift+V** — replace everything (Ctrl+Z should undo)
-- **Shift+click Paste** — append at the end
-- Drag a `.txt` / plain-text file onto the editor — same as replace Paste
+| | |
+|---|---|
+| **Current** | Last prompt that was actually active (typed *or* last resolved LLM) |
+| **Last manual** | Last thing you typed (or promoted with Use as current) |
+| **Last LLM** | Last resolved connected STRING |
 
-Plain Ctrl+V still inserts at the caret.
+Example: you type `A`, connect an LLM that produces `B` then `C`, then unplug (or click MANUAL):
 
-## Spellcheck
+- Screen stays on `C` and becomes editable
+- Last manual is still `A` until you edit
+- After you change `C` into `D`: current = `D`, last manual = `D`, last LLM = `C`
 
-The editor uses native browser spellcheck (`spellcheck="true"`, `lang="en"`). Misspelled English words get the browser underline and right-click suggestions. Nothing is auto-corrected. Prompt syntax, LoRA names, and invented words are left alone.
+The LLM editor updates when this node **executes** and the connected STRING resolves. Token-by-token streaming from arbitrary LLM nodes is not assumed.
 
-## Workflow persistence
+---
 
-Saved with the workflow:
+## Workflow save
 
-- current prompt
-- last manual input
-- last LLM input
-- source mode (`MANUAL` / `LLM`)
+Saved with the workflow: current prompt, last manual, last LLM, MANUAL/LLM mode.
 
-Not saved (reset on reload): search query, Copied indicator, history-unlocked state.
+Not saved: find query, “Copied/Pasted” flash, history unlock, Find bar open.
 
-## Disconnecting or switching off an LLM
+---
 
-Example: manual `A` → connect LLM → generate `B` then `C` → disconnect **or** click to MANUAL (cable stays).
+## Requirements
 
-- Status becomes `MANUAL`
-- Editor keeps `C` (last active prompt) and becomes editable
-- Last Manual stays `A` until you actually edit
-- After you edit `C` into `D`: current = `D`, last manual = `D`, last LLM = `C`
-- If the cable is still connected, click the control again to return to LLM (`C` as the active graph value; `D` remains in Last Manual)
+- ComfyUI **0.34+** (V3 node API)
+- No Python or npm packages beyond ComfyUI
 
-## LLM result refresh
+See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for the support matrix.
 
-A graph link does not expose the upstream runtime STRING to this editor before execution. After this node runs, the backend returns the resolved STRING and a `PreviewText` UI payload. The frontend `onExecuted` handler updates the visible CURRENT text.
+## License
 
-Arbitrary token-by-token streaming from upstream LLM nodes is **not** guaranteed. The editor refreshes when the connected STRING is resolved through normal ComfyUI execution.
-
-## Dependencies
-
-None beyond ComfyUI, the Python standard library, and browser APIs.
-
-## Compatibility
-
-Built against current ComfyUI V3 (`comfy_api.latest` / `ComfyExtension`) with a fallback import of `comfy_api.v0_0_2`. See `docs/COMPATIBILITY.md`.
-
-## Limitations
-
-- No in-node AI generation, presets, databases, or prompt rewriting
-- No regex search in v0.1
-- Native spellcheck quality depends on the browser
-- Streaming tokens from arbitrary LLM nodes is not a generic ComfyUI feature; refresh happens on execution
+[MIT](LICENSE)
