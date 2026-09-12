@@ -1,9 +1,10 @@
 [project]
 name = "prompt-editor"
-version = "0.1.0"
+version = "0.1.1"
 description = "A ComfyUI custom node for writing and inspecting prompts, with MANUAL/LLM status and last-input history."
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
+authors = [{ name = "Bonfire" }]
 dependencies = []
 classifiers = [
     "Operating System :: OS Independent",
@@ -13,8 +14,12 @@ classifiers = [
 
 [project.urls]
 Repository = "https://github.com/DaemonSK/ComfyUI-PromptEditor"
+Documentation = "https://github.com/DaemonSK/ComfyUI-PromptEditor#prompt-editor"
+"Bug Tracker" = "https://github.com/DaemonSK/ComfyUI-PromptEditor/issues"
 
 [tool.comfy]
 PublisherId = "bonfire"
 DisplayName = "Prompt Editor"
+Icon = "https://raw.githubusercontent.com/DaemonSK/ComfyUI-PromptEditor/master/assets/icon.svg"
+Banner = "https://raw.githubusercontent.com/DaemonSK/ComfyUI-PromptEditor/master/assets/banner.svg"
 requires-comfyui = ">=0.34.0"

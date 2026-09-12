@@ -5,6 +5,7 @@ The Registry powers ComfyUI-Manager. This node publishes as:
 - Publisher id: `bonfire` (display name Bonfire)
 - Node id: `prompt-editor` (immutable after first publish)
 - GitHub: https://github.com/DaemonSK/ComfyUI-PromptEditor
+- Icon / banner: `assets/icon.svg`, `assets/banner.svg`
 
 ## Secrets (not in git)
 

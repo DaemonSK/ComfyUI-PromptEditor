@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="720" viewBox="0 0 1680 720" role="img" aria-label="Prompt Editor by Bonfire">
+  <rect width="1680" height="720" fill="#121212"/>
+  <rect x="48" y="48" width="1584" height="624" rx="40" fill="#1a1a1a" stroke="#333" stroke-width="3"/>
+  <rect x="96" y="120" width="520" height="480" rx="28" fill="#161616" stroke="#3a3a3a" stroke-width="3"/>
+  <rect x="128" y="156" width="456" height="48" rx="12" fill="#252525"/>
+  <circle cx="160" cy="180" r="10" fill="#6aaa5c"/>
+  <rect x="184" y="174" width="70" height="12" rx="6" fill="#8a8a8a"/>
+  <rect x="266" y="174" width="48" height="12" rx="6" fill="#5c5c5c"/>
+  <rect x="326" y="174" width="40" height="12" rx="6" fill="#5c5c5c"/>
+  <rect x="128" y="224" width="456" height="332" rx="16" fill="#141414" stroke="#333" stroke-width="2"/>
+  <rect x="160" y="260" width="320" height="12" rx="6" fill="#c8c8c8"/>
+  <rect x="160" y="296" width="268" height="12" rx="6" fill="#7a7a7a"/>
+  <rect x="160" y="332" width="300" height="12" rx="6" fill="#9a9a9a"/>
+  <rect x="160" y="368" width="200" height="12" rx="6" fill="#6aaa5c" opacity="0.9"/>
+  <rect x="368" y="364" width="3" height="20" rx="1.5" fill="#e8e8e8"/>
+  <text x="720" y="300" fill="#f2f2f2" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="88" font-weight="650">Prompt Editor</text>
+  <text x="720" y="372" fill="#8a8a8a" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="36">A ComfyUI node for writing and inspecting prompts</text>
+  <text x="720" y="448" fill="#6aaa5c" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="28" font-weight="600">by Bonfire</text>
+</svg>
