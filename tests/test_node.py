@@ -29,6 +29,7 @@ class SchemaTests(unittest.TestCase):
         self.assertIn("current_prompt", input_ids)
         self.assertIn("last_manual_input", input_ids)
         self.assertIn("last_llm_input", input_ids)
+        self.assertIn("source_mode", input_ids)
         self.assertEqual(schema.outputs[0].get_io_type(), "STRING")
         self.assertEqual(len(schema.outputs), 1)
 
@@ -37,6 +38,21 @@ class SchemaTests(unittest.TestCase):
         text = next(i for i in schema.inputs if i.id == "text")
         self.assertTrue(text.optional)
         self.assertTrue(text.force_input)
+        self.assertTrue(text.lazy)
+
+    def test_lazy_status_requests_text_only_in_llm_mode(self):
+        self.assertEqual(
+            PromptEditor.check_lazy_status(source_mode="MANUAL", text=None),
+            [],
+        )
+        self.assertEqual(
+            PromptEditor.check_lazy_status(source_mode="LLM", text=None),
+            ["text"],
+        )
+        self.assertEqual(
+            PromptEditor.check_lazy_status(source_mode="LLM", text="ready"),
+            [],
+        )
 
 
 class ExecuteTests(unittest.TestCase):
@@ -46,13 +62,17 @@ class ExecuteTests(unittest.TestCase):
         self.assertEqual(result.args[0], raw)
         self.assertEqual(result.ui.as_dict()["text"], (raw,))
 
-    def test_connected_string_wins(self):
-        result = PromptEditor.execute(current_prompt="manual", text="llm value")
+    def test_connected_string_wins_in_llm_mode(self):
+        result = PromptEditor.execute(current_prompt="manual", text="llm value", source_mode="LLM")
         self.assertEqual(result.args[0], "llm value")
         self.assertEqual(result.ui.as_dict()["text"], ("llm value",))
 
+    def test_manual_mode_ignores_connected_string(self):
+        result = PromptEditor.execute(current_prompt="local", text="llm value", source_mode="MANUAL")
+        self.assertEqual(result.args[0], "local")
+
     def test_empty_connected_string_is_llm(self):
-        result = PromptEditor.execute(current_prompt="manual", text="")
+        result = PromptEditor.execute(current_prompt="manual", text="", source_mode="LLM")
         self.assertEqual(result.args[0], "")
 
     def test_none_text_uses_current(self):

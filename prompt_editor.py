@@ -32,9 +32,10 @@ class PromptEditor(io.ComfyNode):
             display_name=DISPLAY_NAME,
             category=CATEGORY,
             description=(
-                "Write and inspect prompts. Connect an upstream STRING to use it "
-                "as the active graph value (LLM status). History buttons never "
-                "change the active output."
+                "Write and inspect prompts. Connect an upstream STRING, then use "
+                "the MANUAL/LLM control to choose local text or the connected "
+                "value without disconnecting. History buttons never change the "
+                "active output."
             ),
             search_aliases=["prompt editor", "text editor", "llm prompt", "prompt text"],
             is_output_node=True,
@@ -43,7 +44,17 @@ class PromptEditor(io.ComfyNode):
                     "text",
                     optional=True,
                     force_input=True,
+                    lazy=True,
                     tooltip="Connect any upstream STRING (local or remote LLM, or any text node).",
+                ),
+                io.String.Input(
+                    "source_mode",
+                    default="MANUAL",
+                    multiline=False,
+                    socketless=True,
+                    dynamic_prompts=False,
+                    extra_dict=_HIDDEN_WIDGET,
+                    tooltip="Active mode: MANUAL (local text) or LLM (connected STRING).",
                 ),
                 io.String.Input(
                     "current_prompt",
@@ -88,12 +99,28 @@ class PromptEditor(io.ComfyNode):
         current_prompt: str = "",
         last_manual_input: str = "",  # noqa: ARG003
         last_llm_input: str = "",  # noqa: ARG003
+        source_mode: str = "MANUAL",
         text: str | None = None,
         **kwargs: Any,
     ):
-        if text is not None:
+        mode = _normalize_mode(source_mode)
+        if mode == "LLM" and text is not None:
             return ("llm", text)
         return ("manual", current_prompt if current_prompt is not None else "")
+
+    @classmethod
+    def check_lazy_status(
+        cls,
+        current_prompt: str = "",  # noqa: ARG003
+        last_manual_input: str = "",  # noqa: ARG003
+        last_llm_input: str = "",  # noqa: ARG003
+        source_mode: str = "MANUAL",
+        text: str | None = None,
+        **kwargs: Any,
+    ):
+        if _normalize_mode(source_mode) == "LLM" and text is None:
+            return ["text"]
+        return []
 
     @classmethod
     def execute(
@@ -101,6 +128,7 @@ class PromptEditor(io.ComfyNode):
         current_prompt: str = "",
         last_manual_input: str = "",  # noqa: ARG003 - persisted by frontend
         last_llm_input: str = "",  # noqa: ARG003 - persisted by frontend
+        source_mode: str = "MANUAL",
         text: str | None = None,
         **kwargs: Any,
     ) -> io.NodeOutput:
@@ -109,7 +137,10 @@ class PromptEditor(io.ComfyNode):
         if not isinstance(current_prompt, str):
             current_prompt = str(current_prompt)
 
-        if text is None:
+        mode = _normalize_mode(source_mode)
+        if mode == "MANUAL":
+            output = current_prompt
+        elif text is None:
             output = current_prompt
         else:
             if not isinstance(text, str):
@@ -117,6 +148,12 @@ class PromptEditor(io.ComfyNode):
             output = text
 
         return io.NodeOutput(output, ui=ui.PreviewText(output))
+
+
+def _normalize_mode(source_mode: str | None) -> str:
+    if isinstance(source_mode, str) and source_mode.strip().upper() == "LLM":
+        return "LLM"
+    return "MANUAL"
 
 
 class PromptEditorExtension(ComfyExtension):

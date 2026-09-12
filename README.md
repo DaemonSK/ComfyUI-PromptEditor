@@ -42,29 +42,33 @@ No extra Python or npm packages are required.
 | Input | Optional connectable `STRING` named `text`. Any upstream text node counts, including a local LLM. |
 | Output | Standard ComfyUI `STRING` named `prompt`. Connect it to CLIP encode, samplers, or any STRING consumer. |
 
-In **MANUAL** mode (no cable) the output is the current prompt.  
-In **LLM** mode (cable connected) the output is the resolved upstream STRING after execution.
+In **MANUAL** mode the output is the current prompt.  
+In **LLM** mode the output is the resolved upstream STRING after execution.
 
-## MANUAL vs LLM status
+A connected cable does **not** force LLM mode. Click the MANUAL/LLM control to switch while keeping the cable.
 
-The status badge is on the **far left** of the toolbar. It is **not a button**.
+## MANUAL vs LLM
 
-| Badge | Meaning |
+The control is on the **far left** of the toolbar.
+
+| | |
 |---|---|
-| `MANUAL` | No STRING input connected |
-| `LLM` | STRING input is connected |
+| `MANUAL` (no light) | No STRING connected. Editing is local. |
+| `MANUAL` (hollow green dot) | Cable still connected, but output is your local text. Click to use LLM. |
+| `LLM` (filled green light) | Using the connected STRING. CURRENT is read-only. Click to edit locally without disconnecting. |
 
-`LLM` means “an upstream text-producing node is linked.” It does **not** mean a cloud model. A local LLM is the same.
+`LLM` means “use the upstream text node.” It does **not** mean a cloud model.
 
-Status follows the cable only. Viewing Last Manual / Last LLM never changes it.
-
-An empty connected STRING is still `LLM`. A filled unconnected editor is still `MANUAL`.
+- Connect a cable → switches to LLM.
+- Disconnect → switches to MANUAL and keeps the last current text.
+- While connected, click the control to toggle. The cable stays.
+- Viewing Last Manual / Last LLM never changes this control.
 
 ## Toolbar
 
 Left to right:
 
-`[ STATUS ]`  Find  Find & Replace  Copy  Last Manual Input  Last LLM Input
+`[ MANUAL/LLM ]`  Find  Find & Replace  Copy  Paste  Last Manual Input  Last LLM Input
 
 ## Last Manual Input
 
@@ -114,6 +118,12 @@ They are unavailable in CURRENT connected-LLM view (the upstream STRING is autho
 
 Copies **exactly** the text currently shown in the editor, including line breaks — even if that is a history view and the graph output is different. The button briefly shows `✓ Copied`.
 
+## Paste
+
+Replaces the **entire displayed** buffer with the clipboard, exact text. Same editability rules as typing (CURRENT MANUAL, or unlocked history). Disabled in CURRENT LLM mode and locked history.
+
+Shortcut: **Ctrl+Shift+V**. Plain Ctrl+V still inserts at the caret. The button briefly shows `✓ Pasted`.
+
 ## Spellcheck
 
 The editor uses native browser spellcheck (`spellcheck="true"`, `lang="en"`). Misspelled English words get the browser underline and right-click suggestions. Nothing is auto-corrected. Prompt syntax, LoRA names, and invented words are left alone.
@@ -125,17 +135,19 @@ Saved with the workflow:
 - current prompt
 - last manual input
 - last LLM input
+- source mode (`MANUAL` / `LLM`)
 
 Not saved (reset on reload): search query, Copied indicator, history-unlocked state.
 
-## Disconnecting an LLM
+## Disconnecting or switching off an LLM
 
-Example: manual `A` → connect LLM → generate `B` then `C` → disconnect.
+Example: manual `A` → connect LLM → generate `B` then `C` → disconnect **or** click to MANUAL (cable stays).
 
 - Status becomes `MANUAL`
 - Editor keeps `C` (last active prompt) and becomes editable
 - Last Manual stays `A` until you actually edit
 - After you edit `C` into `D`: current = `D`, last manual = `D`, last LLM = `C`
+- If the cable is still connected, click the control again to return to LLM (`C` as the active graph value; `D` remains in Last Manual)
 
 ## LLM result refresh
 

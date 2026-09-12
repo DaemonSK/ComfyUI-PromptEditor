@@ -35,15 +35,29 @@ class PromptEditorState:
     history_unlocked: bool = False
     has_last_manual: bool = False
     has_last_llm: bool = False
+    connected: bool = False
 
     def status(self) -> SourceMode:
-        """MANUAL/LLM is connection state only. History never changes this."""
+        """MANUAL/LLM is the active mode. History viewing never changes this."""
         return self.source_mode
+
+    def light(self) -> str:
+        """on = using LLM, idle = cable present but MANUAL, off = no cable."""
+        if self.source_mode == "LLM":
+            return "on"
+        if self.connected:
+            return "idle"
+        return "off"
+
+    def can_toggle_mode(self) -> bool:
+        return self.connected
 
     def displayed_text(self) -> str:
         if self.view_mode == "LAST_MANUAL":
             return self.last_manual_input
         if self.view_mode == "LAST_LLM":
+            return self.last_llm_input
+        if self.source_mode == "LLM" and self.has_last_llm:
             return self.last_llm_input
         return self.current_prompt
 
@@ -61,29 +75,51 @@ class PromptEditorState:
     def is_replace_allowed(self) -> bool:
         return self.is_editable()
 
+    def is_paste_allowed(self) -> bool:
+        return self.is_editable()
+
     def active_output(self) -> str:
         """Graph output. History viewing/editing must never change this."""
+        if self.source_mode == "LLM" and self.has_last_llm:
+            return self.last_llm_input
         return self.current_prompt
 
     def on_connect(self) -> None:
+        self.connected = True
         self.source_mode = "LLM"
         self.history_unlocked = False
 
     def on_disconnect(self) -> None:
         """Keep current prompt (last active, often last LLM). Do not overwrite last_manual."""
+        self.connected = False
         self.source_mode = "MANUAL"
         self.history_unlocked = False
-        if self.view_mode == "CURRENT":
-            pass
+
+    def toggle_source_mode(self) -> bool:
+        """Switch MANUAL/LLM while keeping the cable. No-op if unconnected."""
+        if not self.connected:
+            return False
+        self.source_mode = "MANUAL" if self.source_mode == "LLM" else "LLM"
+        self.history_unlocked = False
+        return True
+
+    def paste_replace(self, text: str) -> bool:
+        if not self.is_paste_allowed():
+            return False
+        if not isinstance(text, str):
+            text = str(text)
+        self.on_manual_edit(text)
+        return True
 
     def on_llm_resolved(self, text: str) -> None:
         if text is None:
             return
         if not isinstance(text, str):
             text = str(text)
-        self.current_prompt = text
         self.last_llm_input = text
         self.has_last_llm = True
+        if self.source_mode == "LLM":
+            self.current_prompt = text
 
     def on_manual_edit(self, text: str) -> None:
         if not self.is_editable():

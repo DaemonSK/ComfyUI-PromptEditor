@@ -158,9 +158,12 @@ class PromptEditorController {
     this.matchIndex = -1;
     this.matches = [];
     this.copyTimer = 0;
+    this.pasteTimer = 0;
     this.disposed = false;
     this._syncingEditor = false;
     this._listeners = [];
+    this._connected = false;
+    this._hasLlmValue = false;
 
     this.root = this._buildDom();
     this._bindNode();
@@ -170,12 +173,14 @@ class PromptEditorController {
   }
 
   _buildDom() {
-    this.statusEl = el("div", {
+    this.statusLight = el("span", { class: "xai-pe-light", "aria-hidden": "true" });
+    this.statusLabel = el("span", { class: "xai-pe-status-label", text: "MANUAL" });
+    this.statusEl = el("button", {
       class: "xai-pe-status",
-      role: "status",
+      type: "button",
       "aria-live": "polite",
-      title: "MANUAL: no STRING connected. LLM: a STRING input is connected (any upstream text node).",
-    });
+      title: "Connect a STRING to use LLM mode.",
+    }, [this.statusLight, this.statusLabel]);
     this.btnFind = el("button", { class: "xai-pe-btn", type: "button", text: "Find", title: "Find (Ctrl+F)" });
     this.btnReplace = el("button", {
       class: "xai-pe-btn",
@@ -188,6 +193,12 @@ class PromptEditorController {
       type: "button",
       text: "Copy",
       title: "Copy the text currently displayed in the editor",
+    });
+    this.btnPaste = el("button", {
+      class: "xai-pe-btn",
+      type: "button",
+      text: "Paste",
+      title: "Replace the displayed text with the clipboard (Ctrl+Shift+V)",
     });
     this.btnLastManual = el("button", {
       class: "xai-pe-btn",
@@ -207,6 +218,7 @@ class PromptEditorController {
       this.btnFind,
       this.btnReplace,
       this.btnCopy,
+      this.btnPaste,
       this.btnLastManual,
       this.btnLastLlm,
     ]);
@@ -273,9 +285,11 @@ class PromptEditorController {
     ]);
 
     for (const btn of [
+      this.statusEl,
       this.btnFind,
       this.btnReplace,
       this.btnCopy,
+      this.btnPaste,
       this.btnPrev,
       this.btnNext,
       this.btnDoReplace,
@@ -285,9 +299,11 @@ class PromptEditorController {
     ]) {
       btn.addEventListener("mousedown", (e) => e.preventDefault());
     }
+    this.statusEl.addEventListener("click", () => this.toggleSourceMode());
     this.btnFind.addEventListener("click", () => this.toggleSearch(false));
     this.btnReplace.addEventListener("click", () => this.toggleSearch(true));
     this.btnCopy.addEventListener("click", () => this.copyDisplayed());
+    this.btnPaste.addEventListener("click", () => this.pasteReplace());
     this.btnLastManual.addEventListener("click", () => this.toggleHistory(VIEW.LAST_MANUAL));
     this.btnLastLlm.addEventListener("click", () => this.toggleHistory(VIEW.LAST_LLM));
     this.btnPrev.addEventListener("click", () => this.gotoMatch(-1));
@@ -356,7 +372,7 @@ class PromptEditorController {
       prevRemoved?.apply(this, arguments);
     };
 
-    for (const name of ["current_prompt", "last_manual_input", "last_llm_input"]) {
+    for (const name of ["current_prompt", "last_manual_input", "last_llm_input", "source_mode"]) {
       hideWidget(getWidget(node, name));
     }
 
@@ -389,6 +405,7 @@ class PromptEditorController {
     if (this.disposed) return;
     this.disposed = true;
     if (this.copyTimer) window.clearTimeout(this.copyTimer);
+    if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
     for (const off of this._listeners) {
       try {
         off();
@@ -412,12 +429,20 @@ class PromptEditorController {
   }
 
   sourceMode() {
-    return isTextConnected(this.node) ? "LLM" : "MANUAL";
+    const saved = getWidgetValue(this.node, "source_mode");
+    return saved === "LLM" ? "LLM" : "MANUAL";
+  }
+
+  _setSourceMode(mode) {
+    setWidgetValue(this.node, "source_mode", mode === "LLM" ? "LLM" : "MANUAL");
   }
 
   displayedText() {
     if (this.viewMode === VIEW.LAST_MANUAL) return getWidgetValue(this.node, "last_manual_input");
     if (this.viewMode === VIEW.LAST_LLM) return getWidgetValue(this.node, "last_llm_input");
+    if (this.sourceMode() === "LLM" && this._hasLlmValue) {
+      return getWidgetValue(this.node, "last_llm_input");
+    }
     return getWidgetValue(this.node, "current_prompt");
   }
 
@@ -426,13 +451,32 @@ class PromptEditorController {
     return this.historyUnlocked;
   }
 
-  refreshConnectionStatus() {
-    const mode = this.sourceMode();
-    this.statusEl.dataset.mode = mode;
-    this.statusEl.textContent = mode;
+  refreshConnectionStatus(opts = {}) {
+    const connected = isTextConnected(this.node);
+    const wasConnected = this._connected;
+    this._connected = connected;
+    if (!connected) {
+      this._setSourceMode("MANUAL");
+    } else if (opts.fromLoad) {
+      const saved = getWidgetValue(this.node, "source_mode");
+      if (saved !== "MANUAL" && saved !== "LLM") this._setSourceMode("LLM");
+    } else if (!wasConnected && connected) {
+      this._setSourceMode("LLM");
+    }
+    const llmStored = getWidgetValue(this.node, "last_llm_input");
+    if (opts.fromLoad && llmStored !== "") this._hasLlmValue = true;
     if (this.viewMode === VIEW.CURRENT && !this._syncingEditor) {
       this._writeEditor(this.displayedText());
     }
+  }
+
+  toggleSourceMode() {
+    if (!isTextConnected(this.node)) return;
+    const next = this.sourceMode() === "LLM" ? "MANUAL" : "LLM";
+    this._setSourceMode(next);
+    if (this.viewMode === VIEW.CURRENT) this._writeEditor(this.displayedText());
+    this.node.setDirtyCanvas?.(true, true);
+    this.render();
   }
 
   _syncFromWidgets() {
@@ -483,6 +527,11 @@ class PromptEditorController {
       this.openSearch(true);
       return;
     }
+    if (ctrl && e.shiftKey && (e.key === "v" || e.key === "V")) {
+      e.preventDefault();
+      this.pasteReplace();
+      return;
+    }
     if (e.key === "Escape" && this.searchOpen) {
       e.preventDefault();
       this.closeSearch();
@@ -531,11 +580,12 @@ class PromptEditorController {
     if (this.sourceMode() === "LLM") {
       setWidgetValue(this.node, "current_prompt", text);
       setWidgetValue(this.node, "last_llm_input", text);
-    } else {
-      setWidgetValue(this.node, "current_prompt", text);
+      this._hasLlmValue = true;
+      if (this.viewMode === VIEW.CURRENT) this._writeEditor(text);
+      else if (this.viewMode === VIEW.LAST_LLM && !this.historyUnlocked) {
+        this._writeEditor(getWidgetValue(this.node, "last_llm_input"));
+      }
     }
-    if (this.viewMode === VIEW.CURRENT) this._writeEditor(text);
-    else if (this.viewMode === VIEW.LAST_LLM && !this.historyUnlocked) this._writeEditor(getWidgetValue(this.node, "last_llm_input"));
     this.node.setDirtyCanvas?.(true, true);
     this.render();
   }
@@ -693,6 +743,41 @@ class PromptEditorController {
     }, 900);
   }
 
+  async pasteReplace() {
+    if (!this.isEditable()) return;
+    let text = null;
+    try {
+      if (navigator.clipboard?.readText) text = await navigator.clipboard.readText();
+    } catch {
+      text = null;
+    }
+    if (text == null) {
+      this.btnPaste.textContent = "Blocked";
+      if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
+      this.pasteTimer = window.setTimeout(() => {
+        this.btnPaste.textContent = "Paste";
+      }, 1200);
+      return;
+    }
+    this.textarea.value = text;
+    this._onEditorInput();
+    this.btnPaste.textContent = "✓ Pasted";
+    if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
+    this.pasteTimer = window.setTimeout(() => {
+      this.btnPaste.textContent = "Paste";
+    }, 900);
+  }
+
+  _updatePasteEnabled() {
+    const allowed = this.isEditable();
+    this.btnPaste.disabled = !allowed;
+    this.btnPaste.title = allowed
+      ? "Replace the displayed text with the clipboard (Ctrl+Shift+V)"
+      : this.viewMode === VIEW.CURRENT
+        ? "Paste is unavailable while LLM mode is active. Click MANUAL to edit locally."
+        : "Double-click the editor to unlock this history copy before pasting.";
+  }
+
   _updateFooter() {
     const text = this.textarea.value;
     this.footerEl.textContent = `${countWords(text)} words · ${text.length} chars`;
@@ -700,12 +785,18 @@ class PromptEditorController {
 
   render() {
     const mode = this.sourceMode();
+    const connected = isTextConnected(this.node);
     this.statusEl.dataset.mode = mode;
-    this.statusEl.textContent = mode;
-    this.statusEl.title =
-      mode === "LLM"
-        ? "STRING input is connected. Status stays LLM while viewing history."
-        : "No STRING input connected. Status stays MANUAL while viewing history.";
+    this.statusEl.dataset.light = mode === "LLM" ? "on" : connected ? "idle" : "off";
+    this.statusLabel.textContent = mode;
+    this.statusEl.disabled = !connected;
+    if (!connected) {
+      this.statusEl.title = "Connect a STRING to use LLM mode.";
+    } else if (mode === "LLM") {
+      this.statusEl.title = "Using connected STRING. Click to edit locally without disconnecting.";
+    } else {
+      this.statusEl.title = "Using local text. Cable still connected — click to use LLM.";
+    }
 
     const editable = this.isEditable();
     this.textarea.readOnly = !editable;
@@ -715,11 +806,12 @@ class PromptEditorController {
     this.btnLastManual.classList.toggle("is-history-active", this.viewMode === VIEW.LAST_MANUAL);
     this.btnLastLlm.classList.toggle("is-history-active", this.viewMode === VIEW.LAST_LLM);
     this._updateSearchChrome();
+    this._updatePasteEnabled();
 
     if (this.viewMode !== VIEW.CURRENT && !editable) {
-      this.textarea.title = "History is read-only. Double-click to unlock editing of this stored copy.";
+      this.textarea.title = "History is read-only. Double-click to unlock this stored copy.";
     } else if (this.viewMode === VIEW.CURRENT && mode === "LLM") {
-      this.textarea.title = "Connected STRING is the active graph value. Select and copy freely; editing is locked.";
+      this.textarea.title = "Connected STRING is the active graph value. Click MANUAL to edit locally without disconnecting.";
     } else {
       this.textarea.title = "";
     }
@@ -748,7 +840,7 @@ app.registerExtension({
     const ctl = node?.__xaiPromptEditor;
     if (!ctl) return;
     ctl._syncFromWidgets();
-    ctl.refreshConnectionStatus();
+    ctl.refreshConnectionStatus({ fromLoad: true });
     ctl.render();
   },
   async afterConfigureGraph() {
@@ -757,7 +849,7 @@ app.registerExtension({
       const ctl = node?.__xaiPromptEditor;
       if (!ctl) continue;
       ctl._syncFromWidgets();
-      ctl.refreshConnectionStatus();
+      ctl.refreshConnectionStatus({ fromLoad: true });
       ctl.render();
     }
   },

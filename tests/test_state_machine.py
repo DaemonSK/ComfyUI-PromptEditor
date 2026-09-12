@@ -176,6 +176,74 @@ class ExtraSemanticsTests(unittest.TestCase):
         self.assertEqual(s.current_prompt, "a red dragon")
 
 
+class ModeToggleTests(unittest.TestCase):
+    def test_toggle_to_manual_keeps_cable_and_uses_local_output(self):
+        s = PromptEditorState()
+        s.on_manual_edit("A")
+        s.on_connect()
+        s.on_llm_resolved("C")
+        self.assertTrue(s.connected)
+        self.assertEqual(s.status(), "LLM")
+        self.assertEqual(s.light(), "on")
+
+        self.assertTrue(s.toggle_source_mode())
+        self.assertTrue(s.connected)
+        self.assertEqual(s.status(), "MANUAL")
+        self.assertEqual(s.light(), "idle")
+        self.assertEqual(s.displayed_text(), "C")
+        self.assertEqual(s.last_manual_input, "A")
+        self.assertTrue(s.is_editable())
+        self.assertEqual(s.active_output(), "C")
+
+        s.on_manual_edit("D")
+        self.assertEqual(s.current_prompt, "D")
+        self.assertEqual(s.last_manual_input, "D")
+        self.assertEqual(s.last_llm_input, "C")
+        self.assertEqual(s.active_output(), "D")
+
+        self.assertTrue(s.toggle_source_mode())
+        self.assertEqual(s.status(), "LLM")
+        self.assertEqual(s.light(), "on")
+        self.assertEqual(s.displayed_text(), "C")
+        self.assertEqual(s.current_prompt, "D")
+        self.assertEqual(s.last_manual_input, "D")
+        self.assertEqual(s.active_output(), "C")
+        self.assertFalse(s.is_editable())
+
+    def test_toggle_without_cable_is_noop(self):
+        s = PromptEditorState()
+        s.on_manual_edit("A")
+        self.assertFalse(s.toggle_source_mode())
+        self.assertEqual(s.status(), "MANUAL")
+        self.assertEqual(s.light(), "off")
+        self.assertEqual(s.active_output(), "A")
+
+    def test_history_does_not_change_mode(self):
+        s = PromptEditorState()
+        s.on_manual_edit("A")
+        s.on_connect()
+        s.on_llm_resolved("B")
+        s.toggle_source_mode()
+        self.assertEqual(s.status(), "MANUAL")
+        s.toggle_last_llm()
+        self.assertEqual(s.status(), "MANUAL")
+        self.assertEqual(s.active_output(), "B")
+
+    def test_paste_replaces_when_editable(self):
+        s = PromptEditorState()
+        s.on_manual_edit("old")
+        self.assertTrue(s.paste_replace("  new\nclip  "))
+        self.assertEqual(s.current_prompt, "  new\nclip  ")
+        self.assertEqual(s.last_manual_input, "  new\nclip  ")
+
+    def test_paste_blocked_in_llm_current(self):
+        s = PromptEditorState()
+        s.on_connect()
+        s.on_llm_resolved("keep")
+        self.assertFalse(s.paste_replace("nope"))
+        self.assertEqual(s.current_prompt, "keep")
+
+
 class FindReplaceTests(unittest.TestCase):
     def test_find_is_literal_not_regex(self):
         text = "a+b a+b aXb"
