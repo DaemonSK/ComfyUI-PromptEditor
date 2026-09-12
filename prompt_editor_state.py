@@ -111,6 +111,45 @@ class PromptEditorState:
         self.on_manual_edit(text)
         return True
 
+    def paste_append(self, text: str) -> bool:
+        if not self.is_paste_allowed():
+            return False
+        if not isinstance(text, str):
+            text = str(text)
+        self.on_manual_edit(self.displayed_text() + text)
+        return True
+
+    def use_as_current(self) -> bool:
+        """Promote the visible history buffer to the live MANUAL prompt."""
+        if not self.is_history_view():
+            return False
+        text = self.displayed_text()
+        self.source_mode = "MANUAL"
+        self.view_mode = "CURRENT"
+        self.history_unlocked = False
+        self.current_prompt = text
+        self.last_manual_input = text
+        self.has_last_manual = True
+        return True
+
+    def can_open_last_manual(self) -> bool:
+        return self.has_last_manual
+
+    def can_open_last_llm(self) -> bool:
+        return self.has_last_llm
+
+    def footer_context(self) -> str:
+        if self.view_mode == "LAST_MANUAL":
+            viewing = "Viewing last manual"
+        elif self.view_mode == "LAST_LLM":
+            viewing = "Viewing last LLM"
+        elif self.source_mode == "LLM":
+            viewing = "Viewing current LLM"
+        else:
+            viewing = "Editing current"
+        output = "Output is LLM" if self.source_mode == "LLM" else "Output is MANUAL"
+        return f"{viewing} · {output}"
+
     def on_llm_resolved(self, text: str) -> None:
         if text is None:
             return

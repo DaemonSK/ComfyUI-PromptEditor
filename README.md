@@ -68,17 +68,29 @@ The control is on the **far left** of the toolbar.
 
 Left to right:
 
-`[ MANUAL/LLM ]`  Find  Find & Replace  Copy  Paste  Last Manual Input  Last LLM Input
+`[ MANUAL/LLM ]`  Find  Find & Replace  Copy  Paste  Last Manual Input  Last LLM Input  Use as current
 
 ## Last Manual Input
 
-Click once to view the stored last manual prompt. The editor is read-only at first. Status and graph output do not change. Click again to return to CURRENT.
+Click once to view the stored last manual prompt. The editor is read-only at first. Status and graph output do not change. Click again to return to CURRENT. Disabled until you have actually stored a manual prompt.
 
 ## Last LLM Input
 
-Same behavior as Last Manual Input, for the stored last connected STRING.
+Same behavior as Last Manual Input, for the stored last connected STRING. Disabled until an LLM STRING has been stored.
 
 Only one history view can be active. The active history button gets a subtle highlight.
+
+**Esc** closes Find first; if Find is already closed, Esc leaves history and returns to CURRENT.
+
+## Use as current
+
+While viewing Last Manual or Last LLM, **Use as current** makes that text the live prompt:
+
+- Switches to MANUAL (cable stays if connected)
+- Graph output becomes that text
+- Last Manual is updated to match
+
+History still never changes output unless you click this.
 
 ## Double-click history editing
 
@@ -122,7 +134,11 @@ Copies **exactly** the text currently shown in the editor, including line breaks
 
 Replaces the **entire displayed** buffer with the clipboard, exact text. Same editability rules as typing (CURRENT MANUAL, or unlocked history). Disabled in CURRENT LLM mode and locked history.
 
-Shortcut: **Ctrl+Shift+V**. Plain Ctrl+V still inserts at the caret. The button briefly shows `✓ Pasted`.
+- Click **Paste** or **Ctrl+Shift+V** — replace everything (Ctrl+Z should undo)
+- **Shift+click Paste** — append at the end
+- Drag a `.txt` / plain-text file onto the editor — same as replace Paste
+
+Plain Ctrl+V still inserts at the caret.
 
 ## Spellcheck
 

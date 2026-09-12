@@ -243,6 +243,56 @@ class ModeToggleTests(unittest.TestCase):
         self.assertFalse(s.paste_replace("nope"))
         self.assertEqual(s.current_prompt, "keep")
 
+    def test_paste_append(self):
+        s = PromptEditorState()
+        s.on_manual_edit("hello")
+        self.assertTrue(s.paste_append(" world"))
+        self.assertEqual(s.current_prompt, "hello world")
+
+    def test_use_as_current_from_last_llm(self):
+        s = PromptEditorState()
+        s.on_manual_edit("A")
+        s.on_connect()
+        s.on_llm_resolved("C")
+        s.toggle_last_llm()
+        self.assertEqual(s.active_output(), "C")
+        self.assertTrue(s.use_as_current())
+        self.assertEqual(s.status(), "MANUAL")
+        self.assertEqual(s.view_mode, "CURRENT")
+        self.assertEqual(s.current_prompt, "C")
+        self.assertEqual(s.last_manual_input, "C")
+        self.assertEqual(s.last_llm_input, "C")
+        self.assertEqual(s.active_output(), "C")
+        self.assertTrue(s.is_editable())
+        self.assertTrue(s.connected)
+
+    def test_use_as_current_does_not_run_on_current_view(self):
+        s = PromptEditorState()
+        s.on_manual_edit("A")
+        self.assertFalse(s.use_as_current())
+        self.assertEqual(s.current_prompt, "A")
+
+    def test_empty_history_flags(self):
+        s = PromptEditorState()
+        self.assertFalse(s.can_open_last_manual())
+        self.assertFalse(s.can_open_last_llm())
+        s.on_manual_edit("")
+        self.assertTrue(s.can_open_last_manual())
+        s.on_connect()
+        s.on_llm_resolved("")
+        self.assertTrue(s.can_open_last_llm())
+
+    def test_footer_context_history_vs_output(self):
+        s = PromptEditorState()
+        s.on_manual_edit("A")
+        s.on_connect()
+        s.on_llm_resolved("B")
+        s.toggle_last_manual()
+        self.assertEqual(s.footer_context(), "Viewing last manual · Output is LLM")
+        s.exit_history()
+        s.toggle_source_mode()
+        self.assertEqual(s.footer_context(), "Editing current · Output is MANUAL")
+
 
 class FindReplaceTests(unittest.TestCase):
     def test_find_is_literal_not_regex(self):

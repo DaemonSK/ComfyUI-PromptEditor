@@ -164,6 +164,8 @@ class PromptEditorController {
     this._listeners = [];
     this._connected = false;
     this._hasLlmValue = false;
+    this._hasManualValue = false;
+    this._pulseTimer = 0;
 
     this.root = this._buildDom();
     this._bindNode();
@@ -212,6 +214,13 @@ class PromptEditorController {
       text: "Last LLM Input",
       title: "View stored last connected STRING. Does not change connections, status, or active output.",
     });
+    this.btnUseCurrent = el("button", {
+      class: "xai-pe-btn xai-pe-use-current",
+      type: "button",
+      text: "Use as current",
+      title: "Make this history text the live MANUAL prompt. Graph output will follow it.",
+      hidden: true,
+    });
 
     const toolbar = el("div", { class: "xai-pe-toolbar" }, [
       this.statusEl,
@@ -221,6 +230,7 @@ class PromptEditorController {
       this.btnPaste,
       this.btnLastManual,
       this.btnLastLlm,
+      this.btnUseCurrent,
     ]);
 
     this.findInput = el("input", {
@@ -275,7 +285,9 @@ class PromptEditorController {
     this.textarea.setAttribute("spellcheck", "true");
     this.textarea.setAttribute("lang", "en");
 
-    this.footerEl = el("div", { class: "xai-pe-footer" });
+    this.footerView = el("span", { class: "xai-pe-footer-view" });
+    this.footerCount = el("span", { class: "xai-pe-footer-count" });
+    this.footerEl = el("div", { class: "xai-pe-footer" }, [this.footerView, this.footerCount]);
 
     const root = el("div", { class: "xai-pe" }, [
       toolbar,
@@ -296,6 +308,7 @@ class PromptEditorController {
       this.btnReplaceAll,
       this.btnLastManual,
       this.btnLastLlm,
+      this.btnUseCurrent,
     ]) {
       btn.addEventListener("mousedown", (e) => e.preventDefault());
     }
@@ -303,7 +316,8 @@ class PromptEditorController {
     this.btnFind.addEventListener("click", () => this.toggleSearch(false));
     this.btnReplace.addEventListener("click", () => this.toggleSearch(true));
     this.btnCopy.addEventListener("click", () => this.copyDisplayed());
-    this.btnPaste.addEventListener("click", () => this.pasteReplace());
+    this.btnPaste.addEventListener("click", (e) => this.pasteReplace({ append: e.shiftKey }));
+    this.btnUseCurrent.addEventListener("click", () => this.useAsCurrent());
     this.btnLastManual.addEventListener("click", () => this.toggleHistory(VIEW.LAST_MANUAL));
     this.btnLastLlm.addEventListener("click", () => this.toggleHistory(VIEW.LAST_LLM));
     this.btnPrev.addEventListener("click", () => this.gotoMatch(-1));
@@ -327,6 +341,8 @@ class PromptEditorController {
     this.textarea.addEventListener("dblclick", () => this._onEditorDblClick());
     this.textarea.addEventListener("keydown", (e) => this._onEditorKey(e));
     this.textarea.addEventListener("wheel", (e) => this._onEditorWheel(e), { passive: false });
+    this._bindDrop(root);
+    this._bindDrop(this.textarea);
 
     root.addEventListener("keydown", (e) => e.stopPropagation());
     root.addEventListener("pointerdown", (e) => e.stopPropagation());
@@ -406,6 +422,7 @@ class PromptEditorController {
     this.disposed = true;
     if (this.copyTimer) window.clearTimeout(this.copyTimer);
     if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
+    if (this._pulseTimer) window.clearTimeout(this._pulseTimer);
     for (const off of this._listeners) {
       try {
         off();
@@ -463,8 +480,10 @@ class PromptEditorController {
     } else if (!wasConnected && connected) {
       this._setSourceMode("LLM");
     }
-    const llmStored = getWidgetValue(this.node, "last_llm_input");
-    if (opts.fromLoad && llmStored !== "") this._hasLlmValue = true;
+    if (opts.fromLoad) {
+      if (getWidgetValue(this.node, "last_llm_input") !== "") this._hasLlmValue = true;
+      if (getWidgetValue(this.node, "last_manual_input") !== "") this._hasManualValue = true;
+    }
     if (this.viewMode === VIEW.CURRENT && !this._syncingEditor) {
       this._writeEditor(this.displayedText());
     }
@@ -499,10 +518,13 @@ class PromptEditorController {
     if (this.viewMode === VIEW.CURRENT) {
       setWidgetValue(this.node, "current_prompt", value);
       setWidgetValue(this.node, "last_manual_input", value);
+      this._hasManualValue = true;
     } else if (this.viewMode === VIEW.LAST_MANUAL) {
       setWidgetValue(this.node, "last_manual_input", value);
+      this._hasManualValue = true;
     } else if (this.viewMode === VIEW.LAST_LLM) {
       setWidgetValue(this.node, "last_llm_input", value);
+      this._hasLlmValue = true;
     }
     this._updateFooter();
     if (this.searchOpen) this.recomputeMatches(false, { select: false });
@@ -532,9 +554,18 @@ class PromptEditorController {
       this.pasteReplace();
       return;
     }
-    if (e.key === "Escape" && this.searchOpen) {
+    if (e.key === "Escape") {
       e.preventDefault();
-      this.closeSearch();
+      if (this.searchOpen) {
+        this.closeSearch();
+        return;
+      }
+      if (this.viewMode !== VIEW.CURRENT) {
+        this.viewMode = VIEW.CURRENT;
+        this.historyUnlocked = false;
+        this._writeEditor(this.displayedText());
+        this.render();
+      }
     }
   }
 
@@ -556,12 +587,23 @@ class PromptEditorController {
       }
     } else if (e.key === "Escape") {
       e.preventDefault();
-      this.closeSearch();
-      if (this.isEditable()) this.textarea.focus();
+      if (this.searchOpen) {
+        this.closeSearch();
+        if (this.isEditable()) this.textarea.focus();
+        return;
+      }
+      if (this.viewMode !== VIEW.CURRENT) {
+        this.viewMode = VIEW.CURRENT;
+        this.historyUnlocked = false;
+        this._writeEditor(this.displayedText());
+        this.render();
+      }
     }
   }
 
   toggleHistory(mode) {
+    if (mode === VIEW.LAST_MANUAL && !this._hasManualValue && this.viewMode !== VIEW.LAST_MANUAL) return;
+    if (mode === VIEW.LAST_LLM && !this._hasLlmValue && this.viewMode !== VIEW.LAST_LLM) return;
     if (this.viewMode === mode) {
       this.viewMode = VIEW.CURRENT;
       this.historyUnlocked = false;
@@ -581,6 +623,7 @@ class PromptEditorController {
       setWidgetValue(this.node, "current_prompt", text);
       setWidgetValue(this.node, "last_llm_input", text);
       this._hasLlmValue = true;
+      this._pulseLlmLight();
       if (this.viewMode === VIEW.CURRENT) this._writeEditor(text);
       else if (this.viewMode === VIEW.LAST_LLM && !this.historyUnlocked) {
         this._writeEditor(getWidgetValue(this.node, "last_llm_input"));
@@ -743,7 +786,7 @@ class PromptEditorController {
     }, 900);
   }
 
-  async pasteReplace() {
+  async pasteReplace(opts = {}) {
     if (!this.isEditable()) return;
     let text = null;
     try {
@@ -759,28 +802,142 @@ class PromptEditorController {
       }, 1200);
       return;
     }
-    this.textarea.value = text;
-    this._onEditorInput();
-    this.btnPaste.textContent = "✓ Pasted";
+    this._applyEditorText(text, { append: !!opts.append });
+    this.btnPaste.textContent = opts.append ? "✓ Appended" : "✓ Pasted";
     if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
     this.pasteTimer = window.setTimeout(() => {
       this.btnPaste.textContent = "Paste";
     }, 900);
   }
 
+  _applyEditorText(text, opts = {}) {
+    const ta = this.textarea;
+    const next = text == null ? "" : String(text);
+    ta.focus();
+    let ok = false;
+    try {
+      if (opts.append) {
+        const pos = ta.value.length;
+        ta.setSelectionRange(pos, pos);
+        ok = document.execCommand("insertText", false, next);
+      } else if (next === "") {
+        ta.setSelectionRange(0, ta.value.length);
+        ok = document.execCommand("delete");
+      } else {
+        ta.setSelectionRange(0, ta.value.length);
+        ok = document.execCommand("insertText", false, next);
+      }
+    } catch {
+      ok = false;
+    }
+    if (!ok) ta.value = opts.append ? ta.value + next : next;
+    this._onEditorInput();
+  }
+
+  useAsCurrent() {
+    if (this.viewMode === VIEW.CURRENT) return;
+    const text = this.displayedText();
+    this._setSourceMode("MANUAL");
+    this.viewMode = VIEW.CURRENT;
+    this.historyUnlocked = false;
+    setWidgetValue(this.node, "current_prompt", text);
+    setWidgetValue(this.node, "last_manual_input", text);
+    this._hasManualValue = true;
+    this._writeEditor(text);
+    this.node.setDirtyCanvas?.(true, true);
+    this.render();
+  }
+
+  _pulseLlmLight() {
+    if (!this.statusLight) return;
+    this.statusLight.classList.remove("is-pulse");
+    void this.statusLight.offsetWidth;
+    this.statusLight.classList.add("is-pulse");
+    if (this._pulseTimer) window.clearTimeout(this._pulseTimer);
+    this._pulseTimer = window.setTimeout(() => {
+      this.statusLight.classList.remove("is-pulse");
+    }, 700);
+  }
+
+  _bindDrop(target) {
+    target.addEventListener("dragover", (e) => {
+      if (!this._dropHasText(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = this.isEditable() ? "copy" : "none";
+    });
+    target.addEventListener("drop", (e) => {
+      if (!this._dropHasText(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this._handleDrop(e);
+    });
+  }
+
+  _dropHasText(e) {
+    const types = e.dataTransfer?.types;
+    if (!types) return false;
+    const list = Array.from(types);
+    return list.includes("Files") || list.includes("text/plain") || list.includes("text/uri-list");
+  }
+
+  async _handleDrop(e) {
+    if (!this.isEditable()) return;
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    const file = dt.files && dt.files[0];
+    if (file) {
+      if (!this._isTextFile(file)) return;
+      const text = await file.text();
+      this._applyEditorText(text);
+      return;
+    }
+    const plain = dt.getData("text/plain");
+    if (plain) this._applyEditorText(plain);
+  }
+
+  _isTextFile(file) {
+    const name = (file.name || "").toLowerCase();
+    const type = (file.type || "").toLowerCase();
+    if (type.startsWith("text/")) return true;
+    return /\.(txt|md|csv|json|prompt|text)$/.test(name);
+  }
+
   _updatePasteEnabled() {
     const allowed = this.isEditable();
     this.btnPaste.disabled = !allowed;
     this.btnPaste.title = allowed
-      ? "Replace the displayed text with the clipboard (Ctrl+Shift+V)"
+      ? "Replace the displayed text with the clipboard. Shift+click appends. Ctrl+Shift+V replaces."
       : this.viewMode === VIEW.CURRENT
         ? "Paste is unavailable while LLM mode is active. Click MANUAL to edit locally."
         : "Double-click the editor to unlock this history copy before pasting.";
   }
 
+  _updateHistoryButtons() {
+    this.btnLastManual.disabled = !this._hasManualValue && this.viewMode !== VIEW.LAST_MANUAL;
+    this.btnLastLlm.disabled = !this._hasLlmValue && this.viewMode !== VIEW.LAST_LLM;
+    this.btnLastManual.title = this.btnLastManual.disabled
+      ? "No last manual prompt stored yet."
+      : "View stored last manual prompt. Does not change connections, status, or active output.";
+    this.btnLastLlm.title = this.btnLastLlm.disabled
+      ? "No last LLM prompt stored yet."
+      : "View stored last connected STRING. Does not change connections, status, or active output.";
+    const inHistory = this.viewMode !== VIEW.CURRENT;
+    this.btnUseCurrent.hidden = !inHistory;
+    this.btnUseCurrent.disabled = !inHistory;
+  }
+
   _updateFooter() {
     const text = this.textarea.value;
-    this.footerEl.textContent = `${countWords(text)} words · ${text.length} chars`;
+    const mode = this.sourceMode();
+    let viewing;
+    if (this.viewMode === VIEW.LAST_MANUAL) viewing = "Viewing last manual";
+    else if (this.viewMode === VIEW.LAST_LLM) viewing = "Viewing last LLM";
+    else if (mode === "LLM") viewing = "Viewing current LLM";
+    else viewing = "Editing current";
+    const output = mode === "LLM" ? "Output is LLM" : "Output is MANUAL";
+    this.footerView.textContent = `${viewing} · ${output}`;
+    this.footerCount.textContent = `${countWords(text)} words · ${text.length} chars`;
   }
 
   render() {
@@ -807,6 +964,7 @@ class PromptEditorController {
     this.btnLastLlm.classList.toggle("is-history-active", this.viewMode === VIEW.LAST_LLM);
     this._updateSearchChrome();
     this._updatePasteEnabled();
+    this._updateHistoryButtons();
 
     if (this.viewMode !== VIEW.CURRENT && !editable) {
       this.textarea.title = "History is read-only. Double-click to unlock this stored copy.";
