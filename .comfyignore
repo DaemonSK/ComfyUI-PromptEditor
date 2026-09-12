@@ -1,0 +1,7 @@
+tests/
+.github/
+.secrets/
+docs/
+CLAUDE.md
+*.pyc
+__pycache__/

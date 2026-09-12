@@ -15,6 +15,6 @@ classifiers = [
 Repository = "https://github.com/DaemonSK/ComfyUI-PromptEditor"
 
 [tool.comfy]
-PublisherId = "daemonsk"
+PublisherId = "bonfire"
 DisplayName = "Prompt Editor"
 requires-comfyui = ">=0.34.0"

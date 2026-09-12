@@ -13,3 +13,9 @@ build/
 Thumbs.db
 .idea/
 .vscode/
+.secrets/
+.env
+.env.*
+!.env.example
+*.pem
+comfy_node.zip
