@@ -4,8 +4,10 @@ A ComfyUI node for **writing and inspecting prompts**.
 
 It is a real multiline editor (select, copy, undo, spellcheck), not a fake canvas text box. You can type a prompt by hand, or plug in any upstream STRING (local or cloud LLM) and switch between the two **without disconnecting the cable**.
 
-**v0.1.0 beta** · MIT · no extra dependencies  
+**v0.1.1** · MIT · no extra dependencies  
 Add node: **Prompt Editor** · category **utils/text**
+
+![Prompt Editor node](assets/screenshot.png)
 
 ---
 
