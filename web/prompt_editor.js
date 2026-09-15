@@ -378,12 +378,16 @@ class PromptEditorController {
     this.textarea.addEventListener("dblclick", () => this._onEditorDblClick());
     this.textarea.addEventListener("keydown", (e) => this._onEditorKey(e));
     this.textarea.addEventListener("wheel", (e) => this._onEditorWheel(e), { passive: false });
+    this.textarea.addEventListener("paste", (e) => this._onEditorPaste(e));
     this._bindDrop(root);
     this._bindDrop(this.textarea);
 
     root.addEventListener("keydown", (e) => e.stopPropagation());
     root.addEventListener("pointerdown", (e) => e.stopPropagation());
     root.addEventListener("mousedown", (e) => e.stopPropagation());
+    for (const type of ["paste", "copy", "cut"]) {
+      root.addEventListener(type, (e) => e.stopPropagation());
+    }
 
     return root;
   }
@@ -823,32 +827,16 @@ class PromptEditorController {
     }, 900);
   }
 
+  _onEditorPaste(e) {
+    e.stopPropagation();
+    const text = e.clipboardData?.getData("text/plain") ?? "";
+    if (isClipboardFilePathJunk(text)) {
+      e.preventDefault();
+    }
+  }
+
   async pasteReplace(opts = {}) {
     if (!this.isEditable()) return;
-    const append = !!opts.append;
-    const ta = this.textarea;
-    const before = ta.value;
-    ta.focus();
-    if (append) ta.setSelectionRange(before.length, before.length);
-    else ta.setSelectionRange(0, before.length);
-
-    let native = false;
-    try {
-      native = document.execCommand("paste");
-    } catch {
-      native = false;
-    }
-    if (native) {
-      this._onEditorInput();
-      const inserted = append ? ta.value.slice(before.length) : ta.value;
-      if (!isClipboardFilePathJunk(inserted)) {
-        this._pasteFeedback(append);
-        return;
-      }
-      ta.value = before;
-      this._onEditorInput();
-    }
-
     const text = await readClipboardPlainText();
     if (text == null) {
       this.btnPaste.textContent = "No text";
@@ -858,8 +846,8 @@ class PromptEditorController {
       }, 1200);
       return;
     }
-    this._applyEditorText(text, { append });
-    this._pasteFeedback(append);
+    this._applyEditorText(text, { append: !!opts.append });
+    this._pasteFeedback(!!opts.append);
   }
 
   _pasteFeedback(append) {
