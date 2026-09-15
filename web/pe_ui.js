@@ -1056,19 +1056,24 @@ function isPromptEditorNode(node) {
   return !!(node && (node.comfyClass === NODE_ID || node.constructor?.comfyClass === NODE_ID || node.type === NODE_ID));
 }
 
+function attachPromptEditor(node) {
+  if (!isPromptEditorNode(node)) return null;
+  if (node.__xaiPromptEditor) return node.__xaiPromptEditor;
+  node.__xaiPromptEditor = new PromptEditorController(node);
+  node.__xaiPeRev = UI_REV;
+  return node.__xaiPromptEditor;
+}
+
 app.registerExtension({
   name: EXTENSION_NAME,
   async setup() {
     injectCss();
   },
   async nodeCreated(node) {
-    if (!isPromptEditorNode(node)) return;
-    if (node.__xaiPeRev === UI_REV && node.__xaiPromptEditor) return;
-    node.__xaiPromptEditor = new PromptEditorController(node);
-    node.__xaiPeRev = UI_REV;
+    attachPromptEditor(node);
   },
   loadedGraphNode(node) {
-    const ctl = node?.__xaiPromptEditor;
+    const ctl = attachPromptEditor(node);
     if (!ctl) return;
     ctl._syncFromWidgets();
     ctl.refreshConnectionStatus({ fromLoad: true });
@@ -1077,7 +1082,7 @@ app.registerExtension({
   async afterConfigureGraph() {
     const nodes = app.graph?._nodes || app.graph?.nodes || [];
     for (const node of nodes) {
-      const ctl = node?.__xaiPromptEditor;
+      const ctl = attachPromptEditor(node);
       if (!ctl) continue;
       ctl._syncFromWidgets();
       ctl.refreshConnectionStatus({ fromLoad: true });

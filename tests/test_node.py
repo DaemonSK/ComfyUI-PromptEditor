@@ -8,16 +8,20 @@ import unittest
 
 _COMFY_CANDIDATES = [
     os.environ.get("COMFYUI_PATH", ""),
-    r"H:\Comfy\August - auto installer\Comfyui auto installer\ComfyUI",
-    r"C:\Dev\_references\ComfyUI\ComfyUI",
 ]
 for path in _COMFY_CANDIDATES:
     if path and os.path.isdir(path) and path not in sys.path:
         sys.path.insert(0, path)
 
-from prompt_editor import NODE_ID, PromptEditor, comfy_entrypoint  # noqa: E402
+try:
+    from prompt_editor import NODE_ID, PromptEditor, comfy_entrypoint  # noqa: E402
+except ImportError:  # ComfyUI not on PYTHONPATH
+    NODE_ID = None
+    PromptEditor = None
+    comfy_entrypoint = None
 
 
+@unittest.skipIf(PromptEditor is None, "Set COMFYUI_PATH to the ComfyUI root to run node tests")
 class SchemaTests(unittest.TestCase):
     def test_schema_ids_and_io(self):
         schema = PromptEditor.GET_SCHEMA()
@@ -55,6 +59,7 @@ class SchemaTests(unittest.TestCase):
         )
 
 
+@unittest.skipIf(PromptEditor is None, "Set COMFYUI_PATH to the ComfyUI root to run node tests")
 class ExecuteTests(unittest.TestCase):
     def test_manual_passthrough_exact(self):
         raw = "  Hello\nWORLD  {lora:foo}  "
@@ -84,6 +89,7 @@ class ExecuteTests(unittest.TestCase):
         self.assertEqual(result.args[0], "  x  \n")
 
 
+@unittest.skipIf(PromptEditor is None, "Set COMFYUI_PATH to the ComfyUI root to run node tests")
 class EntryPointTests(unittest.TestCase):
     def test_entrypoint_returns_extension(self):
         import asyncio

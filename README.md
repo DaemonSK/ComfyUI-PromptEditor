@@ -82,14 +82,14 @@ Copies **exactly** what is on screen, including line breaks — even if you are 
 
 ### Paste
 
-Replaces the **whole** displayed text with the clipboard. Same edit rules as typing.
+Chrome/Edge cannot silently read another app’s clipboard (that produced the screenshot-path paste box). **Paste** focuses the editor; then press **Ctrl+V**. Screenshot file paths are ignored.
 
 | Action | Result |
 |---|---|
-| **Paste** or **Ctrl+Shift+V** | Replace with clipboard text (screenshot paths ignored) |
-| **Shift+click Paste** | Append at the end |
+| **Paste** then **Ctrl+V** | Replace the displayed text |
+| **Shift+click Paste** then **Ctrl+V** | Append at the end |
+| **Ctrl+V** in the editor | Insert at the caret |
 | Drop a `.txt` file on the editor | Replace with the file |
-| Normal **Ctrl+V** | Insert at the caret |
 
 Disabled while live LLM text is locked, or while history is still read-only.
 

@@ -19,3 +19,4 @@ Thumbs.db
 !.env.example
 *.pem
 comfy_node.zip
+AGENTS-LOCAL.md
