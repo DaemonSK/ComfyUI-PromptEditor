@@ -2,8 +2,8 @@ import { app } from "../../scripts/app.js";
 
 const NODE_ID = "XAI_PromptEditor";
 const EXTENSION_NAME = "xAI.PromptEditor";
-const CSS_ID = "xai-prompt-editor-css-v5";
-const UI_REV = 5;
+const CSS_ID = "xai-prompt-editor-css-v6";
+const UI_REV = 6;
 
 const VIEW = {
   CURRENT: "CURRENT",
@@ -17,9 +17,9 @@ function injectCss() {
   link.id = CSS_ID;
   link.rel = "stylesheet";
   try {
-    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=5";
+    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=6";
   } catch {
-    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=5";
+    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=6";
   }
   document.head.appendChild(link);
 }
@@ -131,47 +131,6 @@ function pickClipboardText(plain, html) {
   return null;
 }
 
-function clipboardItemIsMedia(item) {
-  const types = item?.types || [];
-  return types.some((t) => /^(image|video|audio)\//i.test(t) || t === "Files");
-}
-
-async function readClipboardPlainText() {
-  try {
-    if (navigator.clipboard?.read) {
-      const items = await navigator.clipboard.read();
-      const texts = [];
-      for (const item of items) {
-        if (clipboardItemIsMedia(item) && !item.types?.includes("text/plain") && !item.types?.includes("text/html")) {
-          continue;
-        }
-        let plain = "";
-        let html = "";
-        if (item.types?.includes("text/plain")) {
-          plain = await (await item.getType("text/plain")).text();
-        }
-        if (item.types?.includes("text/html")) {
-          html = await (await item.getType("text/html")).text();
-        }
-        const picked = pickClipboardText(plain, html);
-        if (picked) texts.push(picked);
-      }
-      if (texts.length) return texts[0];
-    }
-  } catch {
-    /* try readText */
-  }
-  try {
-    if (navigator.clipboard?.readText) {
-      const picked = pickClipboardText(await navigator.clipboard.readText(), "");
-      if (picked) return picked;
-    }
-  } catch {
-    /* none */
-  }
-  return null;
-}
-
 async function copyExact(text) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -241,6 +200,7 @@ class PromptEditorController {
     this._hasLlmValue = false;
     this._hasManualValue = false;
     this._pulseTimer = 0;
+    this._pasteMode = null;
 
     this.root = this._buildDom();
     this._bindNode();
@@ -420,7 +380,7 @@ class PromptEditorController {
     this.textarea.addEventListener("dblclick", () => this._onEditorDblClick());
     this.textarea.addEventListener("keydown", (e) => this._onEditorKey(e));
     this.textarea.addEventListener("wheel", (e) => this._onEditorWheel(e), { passive: false });
-    this.textarea.addEventListener("paste", (e) => this._onEditorPaste(e));
+    this.textarea.addEventListener("paste", (e) => this._onEditorPaste(e), true);
     this._bindDrop(root);
     this._bindDrop(this.textarea);
 
@@ -634,7 +594,7 @@ class PromptEditorController {
     }
     if (ctrl && e.shiftKey && (e.key === "v" || e.key === "V")) {
       e.preventDefault();
-      this.pasteReplace();
+      this.pasteReplace({ append: false, replaceAll: true });
       return;
     }
     if (e.key === "Escape") {
@@ -872,34 +832,45 @@ class PromptEditorController {
   _onEditorPaste(e) {
     e.stopPropagation();
     const dt = e.clipboardData;
-    if (!dt) return;
+    const mode = this._pasteMode;
+    this._pasteMode = null;
+    if (!dt) {
+      e.preventDefault();
+      return;
+    }
     const plain = dt.getData("text/plain") ?? "";
     const html = dt.getData("text/html") ?? "";
     const text = pickClipboardText(plain, html);
-    if (!text) {
+    if (!text || !this.isEditable()) {
       e.preventDefault();
       return;
     }
-    if (text !== plain) {
+    if (mode === "replace") {
       e.preventDefault();
-      if (this.isEditable()) this._applyEditorText(text);
+      this._applyEditorText(text, { append: false });
+      this._pasteFeedback(false);
+      return;
+    }
+    if (mode === "append") {
+      e.preventDefault();
+      this._applyEditorText(text, { append: true });
+      this._pasteFeedback(true);
+      return;
     }
   }
 
-  async pasteReplace(opts = {}) {
+  pasteReplace(opts = {}) {
     if (!this.isEditable()) return;
-    this.textarea.focus();
-    const text = await readClipboardPlainText();
-    if (!text) {
-      this.btnPaste.textContent = "No text";
-      if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
-      this.pasteTimer = window.setTimeout(() => {
-        this.btnPaste.textContent = "Paste";
-      }, 1400);
-      return;
+    const ta = this.textarea;
+    this._pasteMode = opts.append ? "append" : "replace";
+    ta.focus();
+    if (opts.append) ta.setSelectionRange(ta.value.length, ta.value.length);
+    else ta.select();
+    try {
+      document.execCommand("paste");
+    } catch {
+      this._pasteMode = null;
     }
-    this._applyEditorText(text, { append: !!opts.append });
-    this._pasteFeedback(!!opts.append);
   }
 
   _pasteFeedback(append) {
