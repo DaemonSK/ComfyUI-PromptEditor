@@ -2,8 +2,8 @@ import { app } from "../../scripts/app.js";
 
 const NODE_ID = "XAI_PromptEditor";
 const EXTENSION_NAME = "xAI.PromptEditor";
-const CSS_ID = "xai-prompt-editor-css-v4";
-const UI_REV = 4;
+const CSS_ID = "xai-prompt-editor-css-v5";
+const UI_REV = 5;
 
 const VIEW = {
   CURRENT: "CURRENT",
@@ -17,9 +17,9 @@ function injectCss() {
   link.id = CSS_ID;
   link.rel = "stylesheet";
   try {
-    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=4";
+    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=5";
   } catch {
-    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=4";
+    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=5";
   }
   document.head.appendChild(link);
 }
@@ -131,39 +131,20 @@ function pickClipboardText(plain, html) {
   return null;
 }
 
-function readOsClipboardViaCapture() {
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = (value) => {
-      if (done) return;
-      done = true;
-      document.removeEventListener("paste", onPaste, true);
-      resolve(value);
-    };
-    const onPaste = (e) => {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const plain = e.clipboardData?.getData("text/plain") || "";
-      const html = e.clipboardData?.getData("text/html") || "";
-      finish(pickClipboardText(plain, html));
-    };
-    document.addEventListener("paste", onPaste, true);
-    let ok = false;
-    try {
-      ok = document.execCommand("paste");
-    } catch {
-      ok = false;
-    }
-    if (!ok) finish(null);
-    else window.setTimeout(() => finish(null), 80);
-  });
+function clipboardItemIsMedia(item) {
+  const types = item?.types || [];
+  return types.some((t) => /^(image|video|audio)\//i.test(t) || t === "Files");
 }
 
 async function readClipboardPlainText() {
   try {
     if (navigator.clipboard?.read) {
       const items = await navigator.clipboard.read();
+      const texts = [];
       for (const item of items) {
+        if (clipboardItemIsMedia(item) && !item.types?.includes("text/plain") && !item.types?.includes("text/html")) {
+          continue;
+        }
         let plain = "";
         let html = "";
         if (item.types?.includes("text/plain")) {
@@ -173,8 +154,9 @@ async function readClipboardPlainText() {
           html = await (await item.getType("text/html")).text();
         }
         const picked = pickClipboardText(plain, html);
-        if (picked) return picked;
+        if (picked) texts.push(picked);
       }
+      if (texts.length) return texts[0];
     }
   } catch {
     /* try readText */
@@ -409,7 +391,11 @@ class PromptEditorController {
     this.btnFind.addEventListener("click", () => this.toggleSearch(false));
     this.btnReplace.addEventListener("click", () => this.toggleSearch(true));
     this.btnCopy.addEventListener("click", () => this.copyDisplayed());
-    this.btnPaste.addEventListener("click", (e) => this.pasteReplace({ append: e.shiftKey }));
+    this.btnPaste.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.pasteReplace({ append: e.shiftKey });
+    });
     this.btnUseCurrent.addEventListener("click", () => this.useAsCurrent());
     this.btnLastManual.addEventListener("click", () => this.toggleHistory(VIEW.LAST_MANUAL));
     this.btnLastLlm.addEventListener("click", () => this.toggleHistory(VIEW.LAST_LLM));
@@ -885,8 +871,10 @@ class PromptEditorController {
 
   _onEditorPaste(e) {
     e.stopPropagation();
-    const plain = e.clipboardData?.getData("text/plain") ?? "";
-    const html = e.clipboardData?.getData("text/html") ?? "";
+    const dt = e.clipboardData;
+    if (!dt) return;
+    const plain = dt.getData("text/plain") ?? "";
+    const html = dt.getData("text/html") ?? "";
     const text = pickClipboardText(plain, html);
     if (!text) {
       e.preventDefault();
@@ -900,8 +888,8 @@ class PromptEditorController {
 
   async pasteReplace(opts = {}) {
     if (!this.isEditable()) return;
-    let text = await readClipboardPlainText();
-    if (!text) text = await readOsClipboardViaCapture();
+    this.textarea.focus();
+    const text = await readClipboardPlainText();
     if (!text) {
       this.btnPaste.textContent = "No text";
       if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
