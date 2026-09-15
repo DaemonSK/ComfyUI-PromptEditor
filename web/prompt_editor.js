@@ -97,6 +97,43 @@ function isTextConnected(node) {
   return !!(input && (input.link != null || input.link === 0));
 }
 
+function isClipboardFilePathJunk(text) {
+  const t = String(text || "").trim();
+  if (!t) return true;
+  if (/ScreenClip/i.test(t)) return true;
+  if (/[\\/]TempState[\\/]/i.test(t)) return true;
+  if (/MicrosoftWindows\.Client/i.test(t)) return true;
+  if (/^[a-zA-Z]:[\\/].+\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(t)) return true;
+  if (/^file:\/\/.+\.(png|jpe?g|gif|webp|bmp)/i.test(t)) return true;
+  if (/^\/.+\.(png|jpe?g|gif|webp|bmp)$/i.test(t) && t.indexOf(" ") < 0) return true;
+  return false;
+}
+
+async function readClipboardPlainText() {
+  try {
+    if (navigator.clipboard?.read) {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        if (!item.types?.includes("text/plain")) continue;
+        const blob = await item.getType("text/plain");
+        const text = await blob.text();
+        if (!isClipboardFilePathJunk(text)) return text;
+      }
+    }
+  } catch {
+    /* try readText */
+  }
+  try {
+    if (navigator.clipboard?.readText) {
+      const text = await navigator.clipboard.readText();
+      if (text != null && !isClipboardFilePathJunk(text)) return text;
+    }
+  } catch {
+    /* none */
+  }
+  return null;
+}
+
 async function copyExact(text) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -788,22 +825,45 @@ class PromptEditorController {
 
   async pasteReplace(opts = {}) {
     if (!this.isEditable()) return;
-    let text = null;
+    const append = !!opts.append;
+    const ta = this.textarea;
+    const before = ta.value;
+    ta.focus();
+    if (append) ta.setSelectionRange(before.length, before.length);
+    else ta.setSelectionRange(0, before.length);
+
+    let native = false;
     try {
-      if (navigator.clipboard?.readText) text = await navigator.clipboard.readText();
+      native = document.execCommand("paste");
     } catch {
-      text = null;
+      native = false;
     }
+    if (native) {
+      this._onEditorInput();
+      const inserted = append ? ta.value.slice(before.length) : ta.value;
+      if (!isClipboardFilePathJunk(inserted)) {
+        this._pasteFeedback(append);
+        return;
+      }
+      ta.value = before;
+      this._onEditorInput();
+    }
+
+    const text = await readClipboardPlainText();
     if (text == null) {
-      this.btnPaste.textContent = "Blocked";
+      this.btnPaste.textContent = "No text";
       if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
       this.pasteTimer = window.setTimeout(() => {
         this.btnPaste.textContent = "Paste";
       }, 1200);
       return;
     }
-    this._applyEditorText(text, { append: !!opts.append });
-    this.btnPaste.textContent = opts.append ? "✓ Appended" : "✓ Pasted";
+    this._applyEditorText(text, { append });
+    this._pasteFeedback(append);
+  }
+
+  _pasteFeedback(append) {
+    this.btnPaste.textContent = append ? "✓ Appended" : "✓ Pasted";
     if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
     this.pasteTimer = window.setTimeout(() => {
       this.btnPaste.textContent = "Paste";
@@ -893,7 +953,7 @@ class PromptEditorController {
       return;
     }
     const plain = dt.getData("text/plain");
-    if (plain) this._applyEditorText(plain);
+    if (plain && !isClipboardFilePathJunk(plain)) this._applyEditorText(plain);
   }
 
   _isTextFile(file) {

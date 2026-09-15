@@ -86,7 +86,7 @@ Replaces the **whole** displayed text with the clipboard. Same edit rules as typ
 
 | Action | Result |
 |---|---|
-| **Paste** or **Ctrl+Shift+V** | Replace everything (Ctrl+Z should undo) |
+| **Paste** or **Ctrl+Shift+V** | Replace with clipboard text (screenshot paths ignored) |
 | **Shift+click Paste** | Append at the end |
 | Drop a `.txt` file on the editor | Replace with the file |
 | Normal **Ctrl+V** | Insert at the caret |
