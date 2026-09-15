@@ -2,8 +2,8 @@ import { app } from "../../scripts/app.js";
 
 const NODE_ID = "XAI_PromptEditor";
 const EXTENSION_NAME = "xAI.PromptEditor";
-const CSS_ID = "xai-prompt-editor-css-v6";
-const UI_REV = 6;
+const CSS_ID = "xai-prompt-editor-css-v7";
+const UI_REV = 7;
 
 const VIEW = {
   CURRENT: "CURRENT",
@@ -17,9 +17,9 @@ function injectCss() {
   link.id = CSS_ID;
   link.rel = "stylesheet";
   try {
-    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=6";
+    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=7";
   } catch {
-    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=6";
+    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=7";
   }
   document.head.appendChild(link);
 }
@@ -235,7 +235,7 @@ class PromptEditorController {
       class: "xai-pe-btn",
       type: "button",
       text: "Paste",
-      title: "Replace the displayed text with the clipboard (Ctrl+Shift+V)",
+      title: "Focus the editor for paste. Chrome cannot silently read other apps' clipboards — press Ctrl+V after clicking. Shift+click appends.",
     });
     this.btnLastManual = el("button", {
       class: "xai-pe-btn",
@@ -863,14 +863,15 @@ class PromptEditorController {
     if (!this.isEditable()) return;
     const ta = this.textarea;
     this._pasteMode = opts.append ? "append" : "replace";
-    ta.focus();
+    ta.focus({ preventScroll: true });
     if (opts.append) ta.setSelectionRange(ta.value.length, ta.value.length);
     else ta.select();
-    try {
-      document.execCommand("paste");
-    } catch {
+    this.btnPaste.textContent = "Ctrl+V";
+    if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
+    this.pasteTimer = window.setTimeout(() => {
+      this.btnPaste.textContent = "Paste";
       this._pasteMode = null;
-    }
+    }, 2500);
   }
 
   _pasteFeedback(append) {
@@ -978,7 +979,7 @@ class PromptEditorController {
     const allowed = this.isEditable();
     this.btnPaste.disabled = !allowed;
     this.btnPaste.title = allowed
-      ? "Replace the displayed text with the clipboard. Shift+click appends. Ctrl+Shift+V replaces."
+      ? "Click then Ctrl+V. Chrome blocks silent paste from other apps. Shift+click appends."
       : this.viewMode === VIEW.CURRENT
         ? "Paste is unavailable while LLM mode is active. Click MANUAL to edit locally."
         : "Double-click the editor to unlock this history copy before pasting.";
