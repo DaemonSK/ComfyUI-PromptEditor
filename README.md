@@ -82,12 +82,12 @@ Copies **exactly** what is on screen, including line breaks — even if you are 
 
 ### Paste
 
-Chrome/Edge cannot silently read another app’s clipboard (that produced the screenshot-path paste box). **Paste** focuses the editor; then press **Ctrl+V**. Screenshot file paths are ignored.
+**Paste** inserts clipboard **text** into the editor. Screenshot file paths are ignored. **Ctrl+V** in the box still inserts at the caret.
 
 | Action | Result |
 |---|---|
-| **Paste** then **Ctrl+V** | Replace the displayed text |
-| **Shift+click Paste** then **Ctrl+V** | Append at the end |
+| **Paste** | Replace the displayed text |
+| **Shift+click Paste** | Append at the end |
 | **Ctrl+V** in the editor | Insert at the caret |
 | Drop a `.txt` file on the editor | Replace with the file |
 

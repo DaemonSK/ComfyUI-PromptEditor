@@ -2,8 +2,8 @@ import { app } from "../../scripts/app.js";
 
 const NODE_ID = "XAI_PromptEditor";
 const EXTENSION_NAME = "xAI.PromptEditor";
-const CSS_ID = "xai-prompt-editor-css-v7";
-const UI_REV = 7;
+const CSS_ID = "xai-prompt-editor-css-v8";
+const UI_REV = 8;
 
 const VIEW = {
   CURRENT: "CURRENT",
@@ -17,9 +17,9 @@ function injectCss() {
   link.id = CSS_ID;
   link.rel = "stylesheet";
   try {
-    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=7";
+    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=8";
   } catch {
-    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=7";
+    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=8";
   }
   document.head.appendChild(link);
 }
@@ -235,7 +235,7 @@ class PromptEditorController {
       class: "xai-pe-btn",
       type: "button",
       text: "Paste",
-      title: "Focus the editor for paste. Chrome cannot silently read other apps' clipboards — press Ctrl+V after clicking. Shift+click appends.",
+      title: "Replace the displayed text with clipboard text. Shift+click appends. Ctrl+V still inserts at the caret.",
     });
     this.btnLastManual = el("button", {
       class: "xai-pe-btn",
@@ -859,19 +859,44 @@ class PromptEditorController {
     }
   }
 
-  pasteReplace(opts = {}) {
+  async pasteReplace(opts = {}) {
     if (!this.isEditable()) return;
+    const append = !!opts.append;
     const ta = this.textarea;
-    this._pasteMode = opts.append ? "append" : "replace";
     ta.focus({ preventScroll: true });
-    if (opts.append) ta.setSelectionRange(ta.value.length, ta.value.length);
+
+    let text = null;
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        text = pickClipboardText(await navigator.clipboard.readText(), "");
+      }
+    } catch {
+      text = null;
+    }
+
+    if (text) {
+      this._applyEditorText(text, { append });
+      this._pasteFeedback(append);
+      return;
+    }
+
+    this._pasteMode = append ? "append" : "replace";
+    if (append) ta.setSelectionRange(ta.value.length, ta.value.length);
     else ta.select();
-    this.btnPaste.textContent = "Ctrl+V";
-    if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
-    this.pasteTimer = window.setTimeout(() => {
-      this.btnPaste.textContent = "Paste";
+    let native = false;
+    try {
+      native = document.execCommand("paste");
+    } catch {
+      native = false;
+    }
+    if (!native) {
       this._pasteMode = null;
-    }, 2500);
+      this.btnPaste.textContent = "Ctrl+V";
+      if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
+      this.pasteTimer = window.setTimeout(() => {
+        this.btnPaste.textContent = "Paste";
+      }, 1600);
+    }
   }
 
   _pasteFeedback(append) {
@@ -979,7 +1004,7 @@ class PromptEditorController {
     const allowed = this.isEditable();
     this.btnPaste.disabled = !allowed;
     this.btnPaste.title = allowed
-      ? "Click then Ctrl+V. Chrome blocks silent paste from other apps. Shift+click appends."
+      ? "Replace displayed text with clipboard text. Shift+click appends. Screenshot file paths are ignored."
       : this.viewMode === VIEW.CURRENT
         ? "Paste is unavailable while LLM mode is active. Click MANUAL to edit locally."
         : "Double-click the editor to unlock this history copy before pasting.";
