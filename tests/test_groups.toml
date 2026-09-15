@@ -1,0 +1,32 @@
+# Backend schema, execution, lazy evaluation, and registration.
+[groups.backend]
+paths = [
+  "__init__.py",
+  "prompt_editor.py",
+]
+python_tests = [
+  "tests/test_node.py",
+]
+frontend_tests = []
+
+# Browser-owned prompt state and UI behavior.
+[groups.frontend]
+paths = [
+  "web/*.js",
+  "web/*.mjs",
+  "web/*.css",
+]
+python_tests = []
+frontend_tests = [
+  "tests/test_frontend_state.mjs",
+]
+
+# Live browser behavior against a running local ComfyUI frontend.
+[groups.browser]
+paths = [
+  "tests/test_e2e_paste.mjs",
+]
+python_tests = []
+frontend_tests = [
+  "tests/test_e2e_paste.mjs",
+]

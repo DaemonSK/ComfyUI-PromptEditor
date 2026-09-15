@@ -1,9 +1,9 @@
 [project]
 name = "prompt-editor"
-version = "0.1.1"
+version = "0.1.2"
 description = "A ComfyUI custom node for writing and inspecting prompts, with MANUAL/LLM status and last-input history."
 license = { file = "LICENSE" }
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.15"
 authors = [{ name = "Bonfire" }]
 dependencies = []
 classifiers = [

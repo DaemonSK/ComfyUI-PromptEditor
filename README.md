@@ -4,7 +4,7 @@ A ComfyUI node for **writing and inspecting prompts**.
 
 It is a real multiline editor (select, copy, undo, spellcheck), not a fake canvas text box. You can type a prompt by hand, or plug in any upstream STRING (local or cloud LLM) and switch between the two **without disconnecting the cable**.
 
-**v0.1.1** · MIT · no extra dependencies  
+**v0.1.2** · MIT · no extra dependencies
 Add node: **Prompt Editor** · category **utils/text**
 
 ![Prompt Editor node](assets/screenshot.png)
@@ -82,7 +82,11 @@ Copies **exactly** what is on screen, including line breaks — even if you are 
 
 ### Paste
 
-**Paste** inserts clipboard **text** into the editor. Screenshot file paths are ignored. **Ctrl+V** in the box still inserts at the caret.
+**Paste** inserts clipboard **text** into the editor. Screenshot file paths are ignored. Browser clipboard security applies:
+
+- **Chrome / Chromium:** allow clipboard access for the ComfyUI site. Once allowed, the button pastes with one click.
+- **Firefox:** click the node's **Paste** button, wait for Firefox's separate **Paste** confirmation to become enabled, then click that confirmation. Firefox does not offer websites a persistent clipboard-read permission, so this is a two-step action.
+- **Any browser:** focus the editor and press **Ctrl+V** to use normal immediate paste at the caret.
 
 | Action | Result |
 |---|---|
@@ -92,6 +96,7 @@ Copies **exactly** what is on screen, including line breaks — even if you are 
 | Drop a `.txt` file on the editor | Replace with the file |
 
 Disabled while live LLM text is locked, or while history is still read-only.
+These restrictions are imposed by the browser and cannot be bypassed by a normal ComfyUI custom node.
 
 ### Last Manual Input
 

@@ -1,0 +1,14 @@
+{
+  "name": "tests",
+  "version": "1.0.0",
+  "description": "Development-only browser tests for ComfyUI Prompt Editor",
+  "scripts": {
+    "test": "node --test test_frontend_state.mjs",
+    "test:e2e": "node test_e2e_paste.mjs"
+  },
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "playwright": "1.49.1"
+  }
+}

@@ -83,6 +83,20 @@ class PromptEditor(io.ComfyNode):
                     extra_dict=_HIDDEN_WIDGET,
                     tooltip="Stored last connected STRING (history buffer).",
                 ),
+                io.Boolean.Input(
+                    "has_last_manual",
+                    default=False,
+                    socketless=True,
+                    extra_dict=_HIDDEN_WIDGET,
+                    tooltip="Whether an empty or non-empty manual history value has been stored.",
+                ),
+                io.Boolean.Input(
+                    "has_last_llm",
+                    default=False,
+                    socketless=True,
+                    extra_dict=_HIDDEN_WIDGET,
+                    tooltip="Whether an empty or non-empty connected STRING has been stored.",
+                ),
             ],
             outputs=[
                 io.String.Output(
@@ -147,7 +161,9 @@ class PromptEditor(io.ComfyNode):
                 text = str(text)
             output = text
 
-        return io.NodeOutput(output, ui=ui.PreviewText(output))
+        ui_payload = ui.PreviewText(output).as_dict()
+        ui_payload["source_mode"] = (mode,)
+        return io.NodeOutput(output, ui=ui_payload)
 
 
 def _normalize_mode(source_mode: str | None) -> str:

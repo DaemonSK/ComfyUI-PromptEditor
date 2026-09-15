@@ -1,15 +1,18 @@
 import { app } from "../../scripts/app.js";
+import {
+  VIEW,
+  applyExecutedText,
+  countWords,
+  findMatches,
+  historyAvailable,
+  isClipboardFilePathJunk,
+  pickClipboardText,
+} from "./prompt_editor_state.mjs";
 
 const NODE_ID = "XAI_PromptEditor";
 const EXTENSION_NAME = "xAI.PromptEditor";
-const CSS_ID = "xai-prompt-editor-css-v8";
-const UI_REV = 8;
-
-const VIEW = {
-  CURRENT: "CURRENT",
-  LAST_MANUAL: "LAST_MANUAL",
-  LAST_LLM: "LAST_LLM",
-};
+const CSS_ID = "xai-prompt-editor-css-v9";
+const UI_REV = 9;
 
 function injectCss() {
   if (document.getElementById(CSS_ID)) return;
@@ -17,46 +20,11 @@ function injectCss() {
   link.id = CSS_ID;
   link.rel = "stylesheet";
   try {
-    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=8";
+    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=9";
   } catch {
-    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=8";
+    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=9";
   }
   document.head.appendChild(link);
-}
-
-function isWordChar(ch) {
-  return /[0-9A-Za-z_]/.test(ch);
-}
-
-function findMatches(text, query, caseSensitive, wholeWord) {
-  if (!query || text == null) return [];
-  const hay = caseSensitive ? text : text.toLowerCase();
-  const needle = caseSensitive ? query : query.toLowerCase();
-  const matches = [];
-  let start = 0;
-  const nlen = needle.length;
-  while (start <= hay.length) {
-    const idx = hay.indexOf(needle, start);
-    if (idx < 0) break;
-    const end = idx + nlen;
-    if (wholeWord) {
-      const leftOk = idx === 0 || !isWordChar(text[idx - 1]);
-      const rightOk = end >= text.length || !isWordChar(text[end]);
-      if (!leftOk || !rightOk) {
-        start = idx + 1;
-        continue;
-      }
-    }
-    matches.push([idx, end]);
-    start = idx + Math.max(nlen, 1);
-  }
-  return matches;
-}
-
-function countWords(text) {
-  if (!text) return 0;
-  const parts = text.trim().split(/\s+/);
-  return parts[0] ? parts.length : 0;
 }
 
 function extractExecutedText(output) {
@@ -69,6 +37,12 @@ function extractExecutedText(output) {
     if (first != null) return String(first);
   }
   return null;
+}
+
+function extractExecutedMode(output) {
+  const mode = output?.source_mode;
+  const value = Array.isArray(mode) ? mode[0] : mode;
+  return value === "LLM" ? "LLM" : value === "MANUAL" ? "MANUAL" : null;
 }
 
 function hideWidget(widget) {
@@ -93,42 +67,23 @@ function getWidgetValue(node, name) {
   return w && typeof w.value === "string" ? w.value : "";
 }
 
+function getWidgetBoolean(node, name) {
+  return getWidget(node, name)?.value === true;
+}
+
 function isTextConnected(node) {
   const input = node.inputs?.find((i) => i.name === "text");
   return !!(input && (input.link != null || input.link === 0));
-}
-
-function isClipboardFilePathJunk(text) {
-  const t = String(text || "")
-    .replace(/^\uFEFF/, "")
-    .replace(/^['"]|['"]$/g, "")
-    .trim();
-  if (!t) return true;
-  if (/ScreenClip/i.test(t)) return true;
-  if (/[\\/]TempState[\\/]/i.test(t)) return true;
-  if (/MicrosoftWindows\.Client/i.test(t)) return true;
-  if (/\{[0-9A-Fa-f-]{36}\}/.test(t) && /\.png/i.test(t)) return true;
-  if (/^[a-zA-Z]:[\\/].+\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(t)) return true;
-  if (/^file:\/\/.+\.(png|jpe?g|gif|webp|bmp)/i.test(t)) return true;
-  if (/^\/.+\.(png|jpe?g|gif|webp|bmp)$/i.test(t) && t.indexOf(" ") < 0) return true;
-  return false;
 }
 
 function htmlToPlain(html) {
   if (!html) return "";
   try {
     const doc = new DOMParser().parseFromString(html, "text/html");
-    return (doc.body?.textContent || "").trim();
+    return doc.body?.textContent || "";
   } catch {
     return "";
   }
-}
-
-function pickClipboardText(plain, html) {
-  if (plain && !isClipboardFilePathJunk(plain)) return plain;
-  const fromHtml = htmlToPlain(html);
-  if (fromHtml && !isClipboardFilePathJunk(fromHtml)) return fromHtml;
-  return null;
 }
 
 async function copyExact(text) {
@@ -200,7 +155,6 @@ class PromptEditorController {
     this._hasLlmValue = false;
     this._hasManualValue = false;
     this._pulseTimer = 0;
-    this._pasteMode = null;
 
     this.root = this._buildDom();
     this._bindNode();
@@ -236,6 +190,12 @@ class PromptEditorController {
       type: "button",
       text: "Paste",
       title: "Replace the displayed text with clipboard text. Shift+click appends. Ctrl+V still inserts at the caret.",
+    });
+    this.pasteNotice = el("div", {
+      class: "xai-pe-paste-notice",
+      text: "",
+      hidden: true,
+      role: "status",
     });
     this.btnLastManual = el("button", {
       class: "xai-pe-btn",
@@ -326,6 +286,7 @@ class PromptEditorController {
 
     const root = el("div", { class: "xai-pe" }, [
       toolbar,
+      this.pasteNotice,
       this.searchEl,
       el("div", { class: "xai-pe-editor-wrap" }, [this.textarea]),
       this.footerEl,
@@ -431,7 +392,14 @@ class PromptEditorController {
       prevRemoved?.apply(this, arguments);
     };
 
-    for (const name of ["current_prompt", "last_manual_input", "last_llm_input", "source_mode"]) {
+    for (const name of [
+      "current_prompt",
+      "last_manual_input",
+      "last_llm_input",
+      "source_mode",
+      "has_last_manual",
+      "has_last_llm",
+    ]) {
       hideWidget(getWidget(node, name));
     }
 
@@ -481,6 +449,7 @@ class PromptEditorController {
     if (!node?.size || !this.root) return;
     const used =
       (this.statusEl?.offsetHeight || 22) +
+      (!this.pasteNotice?.hidden ? this.pasteNotice.offsetHeight + 4 : 0) +
       (this.searchEl?.classList.contains("is-open") ? this.searchEl.offsetHeight + 4 : 0) +
       (this.footerEl?.offsetHeight || 14) +
       16;
@@ -523,10 +492,6 @@ class PromptEditorController {
     } else if (!wasConnected && connected) {
       this._setSourceMode("LLM");
     }
-    if (opts.fromLoad) {
-      if (getWidgetValue(this.node, "last_llm_input") !== "") this._hasLlmValue = true;
-      if (getWidgetValue(this.node, "last_manual_input") !== "") this._hasManualValue = true;
-    }
     if (this.viewMode === VIEW.CURRENT && !this._syncingEditor) {
       this._writeEditor(this.displayedText());
     }
@@ -542,6 +507,16 @@ class PromptEditorController {
   }
 
   _syncFromWidgets() {
+    this._hasLlmValue = historyAvailable(
+      getWidgetBoolean(this.node, "has_last_llm"),
+      getWidgetValue(this.node, "last_llm_input"),
+    );
+    this._hasManualValue = historyAvailable(
+      getWidgetBoolean(this.node, "has_last_manual"),
+      getWidgetValue(this.node, "last_manual_input"),
+    );
+    if (this._hasLlmValue) setWidgetValue(this.node, "has_last_llm", true);
+    if (this._hasManualValue) setWidgetValue(this.node, "has_last_manual", true);
     this._writeEditor(this.displayedText());
   }
 
@@ -561,12 +536,15 @@ class PromptEditorController {
     if (this.viewMode === VIEW.CURRENT) {
       setWidgetValue(this.node, "current_prompt", value);
       setWidgetValue(this.node, "last_manual_input", value);
+      setWidgetValue(this.node, "has_last_manual", true);
       this._hasManualValue = true;
     } else if (this.viewMode === VIEW.LAST_MANUAL) {
       setWidgetValue(this.node, "last_manual_input", value);
+      setWidgetValue(this.node, "has_last_manual", true);
       this._hasManualValue = true;
     } else if (this.viewMode === VIEW.LAST_LLM) {
       setWidgetValue(this.node, "last_llm_input", value);
+      setWidgetValue(this.node, "has_last_llm", true);
       this._hasLlmValue = true;
     }
     this._updateFooter();
@@ -662,12 +640,24 @@ class PromptEditorController {
   onExecuted(output) {
     const text = extractExecutedText(output);
     if (text == null) return;
-    if (this.sourceMode() === "LLM") {
-      setWidgetValue(this.node, "current_prompt", text);
-      setWidgetValue(this.node, "last_llm_input", text);
-      this._hasLlmValue = true;
+    const executedMode = extractExecutedMode(output) || this.sourceMode();
+    const next = applyExecutedText(
+      {
+        currentMode: this.sourceMode(),
+        currentPrompt: getWidgetValue(this.node, "current_prompt"),
+        lastLlmInput: getWidgetValue(this.node, "last_llm_input"),
+        hasLastLlm: this._hasLlmValue,
+      },
+      executedMode,
+      text,
+    );
+    if (executedMode === "LLM") {
+      setWidgetValue(this.node, "current_prompt", next.currentPrompt);
+      setWidgetValue(this.node, "last_llm_input", next.lastLlmInput);
+      setWidgetValue(this.node, "has_last_llm", next.hasLastLlm);
+      this._hasLlmValue = next.hasLastLlm;
       this._pulseLlmLight();
-      if (this.viewMode === VIEW.CURRENT) this._writeEditor(text);
+      if (this.viewMode === VIEW.CURRENT) this._writeEditor(this.displayedText());
       else if (this.viewMode === VIEW.LAST_LLM && !this.historyUnlocked) {
         this._writeEditor(getWidgetValue(this.node, "last_llm_input"));
       }
@@ -832,31 +822,18 @@ class PromptEditorController {
   _onEditorPaste(e) {
     e.stopPropagation();
     const dt = e.clipboardData;
-    const mode = this._pasteMode;
-    this._pasteMode = null;
     if (!dt) {
       e.preventDefault();
       return;
     }
     const plain = dt.getData("text/plain") ?? "";
     const html = dt.getData("text/html") ?? "";
-    const text = pickClipboardText(plain, html);
+    const text = pickClipboardText(plain, html, htmlToPlain);
     if (!text || !this.isEditable()) {
       e.preventDefault();
       return;
     }
-    if (mode === "replace") {
-      e.preventDefault();
-      this._applyEditorText(text, { append: false });
-      this._pasteFeedback(false);
-      return;
-    }
-    if (mode === "append") {
-      e.preventDefault();
-      this._applyEditorText(text, { append: true });
-      this._pasteFeedback(true);
-      return;
-    }
+    this._hidePasteNotice();
   }
 
   async pasteReplace(opts = {}) {
@@ -865,38 +842,48 @@ class PromptEditorController {
     const ta = this.textarea;
     ta.focus({ preventScroll: true });
 
+    let permissionState = null;
+    try {
+      permissionState = (await navigator.permissions?.query({ name: "clipboard-read" }))?.state || null;
+    } catch {
+      permissionState = null;
+    }
+    if (permissionState && permissionState !== "granted") {
+      ta.select();
+      this._showPasteNotice("Chrome/Chromium: allow clipboard for this site. Firefox: confirm its Paste prompt. Or press Ctrl+V.");
+      return;
+    }
+
     let text = null;
     try {
       if (navigator.clipboard && navigator.clipboard.readText) {
-        text = pickClipboardText(await navigator.clipboard.readText(), "");
+        text = pickClipboardText(await navigator.clipboard.readText(), "", htmlToPlain);
       }
     } catch {
       text = null;
     }
 
     if (text) {
+      this._hidePasteNotice();
       this._applyEditorText(text, { append });
       this._pasteFeedback(append);
       return;
     }
 
-    this._pasteMode = append ? "append" : "replace";
-    if (append) ta.setSelectionRange(ta.value.length, ta.value.length);
-    else ta.select();
-    let native = false;
-    try {
-      native = document.execCommand("paste");
-    } catch {
-      native = false;
-    }
-    if (!native) {
-      this._pasteMode = null;
-      this.btnPaste.textContent = "Ctrl+V";
-      if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
-      this.pasteTimer = window.setTimeout(() => {
-        this.btnPaste.textContent = "Paste";
-      }, 1600);
-    }
+    ta.select();
+    this._showPasteNotice("Clipboard read was not completed. Firefox requires its Paste confirmation; Chrome/Chromium requires site permission. Or press Ctrl+V.");
+  }
+
+  _showPasteNotice(message) {
+    this.pasteNotice.textContent = message;
+    this.pasteNotice.hidden = false;
+    this._fitEditor();
+  }
+
+  _hidePasteNotice() {
+    this.pasteNotice.hidden = true;
+    this.pasteNotice.textContent = "";
+    this._fitEditor();
   }
 
   _pasteFeedback(append) {
@@ -939,6 +926,7 @@ class PromptEditorController {
     this.historyUnlocked = false;
     setWidgetValue(this.node, "current_prompt", text);
     setWidgetValue(this.node, "last_manual_input", text);
+    setWidgetValue(this.node, "has_last_manual", true);
     this._hasManualValue = true;
     this._writeEditor(text);
     this.node.setDirtyCanvas?.(true, true);

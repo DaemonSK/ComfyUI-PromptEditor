@@ -10,22 +10,22 @@ supported:
   pytorch: "any (node does not use torch)"
 
 verified:
-  date: "2026-09-07"
-  comfyui_version: "0.34.5"
-  comfyui_commit: "7fd919f0"
-  frontend_version: "1.49.6"
-  frontend_pinned_by_backend: "1.49.6"
+  date: "2026-09-15"
+  comfyui_version: "0.35.1-dirty"
+  comfyui_commit: "856a922befab9d94cb66f36a3dce17234d7a6e31"
+  frontend_version: "1.51.10"
+  frontend_pinned_by_backend: "1.51.10"
   python: "3.12.13"
   pytorch: "2.13.0+cu130 (unused by this node)"
   platform: "windows"
-  method: "unit+integration"
-  evidence: "unittest tests.test_state_machine (15 ok) and tests.test_node (8 ok) against installed ComfyUI; node --check web/prompt_editor.js; main.py --quick-test-for-ci --cpu --disable-all-custom-nodes --whitelist-custom-nodes ComfyUI-PromptEditor --database-url sqlite:///:memory: exit 0, imported in 0.0s, WEB_DIRECTORY registered. GUI not exercised (live ComfyUI already running; restart required to appear in the UI)."
+  method: "pytest+node+live-browser"
+  evidence: "Repository selector: 11 backend tests passed against installed ComfyUI, 8 frontend state tests passed, and the live Playwright paste test passed with the workspace frontend intercepted into ComfyUI. node --check passed for web/pe_ui.js and web/prompt_editor_state.mjs. No model inference."
 
 review:
-  last_review_date: "2026-09-07"
+  last_review_date: "2026-09-15"
   reviewed_upstream_to:
-    comfyui: "eb357862592aefe8e136031b9e3aa14e55abddaa"
-    frontend: "8ee65b85e667579c0176686139b36efbfe02e62d"
+    comfyui: "36da3ff763687eab86a35e1019995dd1fb369b0d"
+    frontend: "06727dd447a559f00ded4560828790beb2928a56"
   next_review_due: ""
 
 upstream_surface:
@@ -50,7 +50,7 @@ upstream_surface:
 
 deprecations:
   - api: "LGraphNode.prototype hijacking"
-    where: "web/prompt_editor.js (instance methods only: onExecuted, onConnectionsChange, onRemoved)"
+    where: "web/pe_ui.js (instance methods only: onExecuted, onConnectionsChange, onRemoved)"
     status: "ok"
     replacement: "No official extension hook exists for connection changes or onExecuted; instance wrapping is scoped to this node."
     action: "keep"
@@ -79,14 +79,14 @@ deprecations:
 
 | | |
 |---|---|
-| Date | 2026-09-07 |
-| ComfyUI version / commit | 0.34.5 / `7fd919f0` |
-| Frontend version exercised | 1.49.6 (package present; GUI not clicked) |
-| Frontend pinned by that backend | 1.49.6 |
+| Date | 2026-09-15 |
+| ComfyUI version / commit | 0.35.1-dirty / `856a922b` |
+| Frontend version exercised | 1.51.10 (live Playwright test) |
+| Frontend pinned by that backend | 1.51.10 |
 | Python / PyTorch | 3.12.13 / 2.13.0+cu130 (unused) |
 | Platform | Windows |
-| Method | `unit` + `integration` (`--quick-test-for-ci`) |
-| Evidence | 23 unittest cases OK; JS `node --check` OK; ComfyUI CI startup exit 0, node imported in 0.0s, web folder registered. No GUI click-through. |
+| Method | `pytest` + Node tests + live Playwright browser test |
+| Evidence | 11 backend tests, 8 frontend state tests, and 1 live browser test passed; JS syntax checks passed. Workspace frontend was intercepted into the running local ComfyUI. No model inference. |
 
 > **Latest upstream ≠ latest stable ≠ what this project targets ≠ what is installed.**
 > Record all four separately; never infer one from another.
@@ -119,12 +119,13 @@ Four versions at build time (2026-09-07):
 
 | API / pattern | Where (file:line) | Status | Replacement | Action |
 |---|---|---|---|---|
-| Instance wrap of `onConnectionsChange` / `onExecuted` | `web/prompt_editor.js` | ok | No official hook for these events | keep, scoped to this node |
-| `beforeResize` also set | `web/prompt_editor.js` | deprecated | `afterResize` | both set for 1.49.6 compat |
-| `import { app } from "../../scripts/app.js"` | `web/prompt_editor.js` | ok | Documented extension import | keep |
+| Instance wrap of `onConnectionsChange` / `onExecuted` | `web/pe_ui.js` | ok | No official hook for these events | keep, scoped to this node |
+| `beforeResize` also set | `web/pe_ui.js` | deprecated | `afterResize` | both set for supported frontend compatibility |
+| `import { app } from "../../scripts/app.js"` | `web/pe_ui.js` | ok | Documented extension import | keep |
 
 ## Review log
 
 | Date | Reviewed upstream to (ComfyUI / frontend) | Outcome | Notes |
 |---|---|---|---|
 | 2026-09-07 | `eb357862` / `8ee65b85e6` | compatible | Unit + CI startup against installed 0.34.5 / frontend 1.49.6. GUI not exercised. |
+| 2026-09-15 | `36da3ff7` / `06727dd4` | compatible | Required V3 schema, UI payload, loader, extension, DOM-widget, and resize surfaces remain present. Backend, Node, syntax, and live paste checks passed against the installed environment. |

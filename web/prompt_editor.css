@@ -151,6 +151,17 @@
   display: flex;
 }
 
+.xai-pe-paste-notice {
+  flex: 0 0 auto;
+  padding: 3px 5px;
+  border: 1px solid color-mix(in srgb, #d6a84b 55%, var(--border-color, #4e4e4e));
+  border-radius: 3px;
+  background: color-mix(in srgb, #d6a84b 12%, var(--comfy-menu-bg, #2a2a2a));
+  color: var(--input-text, var(--fg-color, #ddd));
+  font-size: 10px;
+  line-height: 14px;
+}
+
 .xai-pe-search-row {
   display: flex;
   flex-wrap: wrap;

@@ -3,5 +3,7 @@ tests/
 .secrets/
 docs/
 CLAUDE.md
+AGENTS.md
+AGENTS-LOCAL.md
 *.pyc
 __pycache__/

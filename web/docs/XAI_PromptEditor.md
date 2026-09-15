@@ -8,6 +8,6 @@ Write and inspect prompts in a real multiline editor.
 - **History:** Last Manual Input / Last LLM Input view stored copies without changing graph output. Double-click to unlock editing of a history copy.
 - **Find / Replace:** Ctrl+F and Ctrl+H. Replace is blocked while CURRENT is LLM. Esc closes Find, then leaves history.
 - **Use as current:** while viewing history, promote that text to the live MANUAL prompt.
-- **Paste:** replace from clipboard; Shift+click appends; drop a `.txt` file.
+- **Paste:** replace from clipboard; Shift+click appends; drop a `.txt` file. Chrome/Chromium requires clipboard permission for the ComfyUI site. Firefox requires a second click on its delayed native Paste confirmation each time. Ctrl+V uses normal immediate paste.
 
 The text is never auto-trimmed, rewritten, or spell-corrected.

@@ -2,26 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import sys
 import unittest
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
-_COMFY_CANDIDATES = [
-    os.environ.get("COMFYUI_PATH", ""),
-]
-for path in _COMFY_CANDIDATES:
-    if path and os.path.isdir(path) and path not in sys.path:
-        sys.path.insert(0, path)
-
-try:
-    from prompt_editor import NODE_ID, PromptEditor, comfy_entrypoint  # noqa: E402
-except ImportError:  # ComfyUI not on PYTHONPATH
-    NODE_ID = None
-    PromptEditor = None
-    comfy_entrypoint = None
+from prompt_editor import NODE_ID, PromptEditor, comfy_entrypoint
 
 
-@unittest.skipIf(PromptEditor is None, "Set COMFYUI_PATH to the ComfyUI root to run node tests")
 class SchemaTests(unittest.TestCase):
     def test_schema_ids_and_io(self):
         schema = PromptEditor.GET_SCHEMA()
@@ -34,6 +22,8 @@ class SchemaTests(unittest.TestCase):
         self.assertIn("last_manual_input", input_ids)
         self.assertIn("last_llm_input", input_ids)
         self.assertIn("source_mode", input_ids)
+        self.assertIn("has_last_manual", input_ids)
+        self.assertIn("has_last_llm", input_ids)
         self.assertEqual(schema.outputs[0].get_io_type(), "STRING")
         self.assertEqual(len(schema.outputs), 1)
 
@@ -59,18 +49,19 @@ class SchemaTests(unittest.TestCase):
         )
 
 
-@unittest.skipIf(PromptEditor is None, "Set COMFYUI_PATH to the ComfyUI root to run node tests")
 class ExecuteTests(unittest.TestCase):
     def test_manual_passthrough_exact(self):
         raw = "  Hello\nWORLD  {lora:foo}  "
         result = PromptEditor.execute(current_prompt=raw, text=None)
         self.assertEqual(result.args[0], raw)
-        self.assertEqual(result.ui.as_dict()["text"], (raw,))
+        self.assertEqual(result.ui["text"], (raw,))
+        self.assertEqual(result.ui["source_mode"], ("MANUAL",))
 
     def test_connected_string_wins_in_llm_mode(self):
         result = PromptEditor.execute(current_prompt="manual", text="llm value", source_mode="LLM")
         self.assertEqual(result.args[0], "llm value")
-        self.assertEqual(result.ui.as_dict()["text"], ("llm value",))
+        self.assertEqual(result.ui["text"], ("llm value",))
+        self.assertEqual(result.ui["source_mode"], ("LLM",))
 
     def test_manual_mode_ignores_connected_string(self):
         result = PromptEditor.execute(current_prompt="local", text="llm value", source_mode="MANUAL")
@@ -89,7 +80,6 @@ class ExecuteTests(unittest.TestCase):
         self.assertEqual(result.args[0], "  x  \n")
 
 
-@unittest.skipIf(PromptEditor is None, "Set COMFYUI_PATH to the ComfyUI root to run node tests")
 class EntryPointTests(unittest.TestCase):
     def test_entrypoint_returns_extension(self):
         import asyncio
@@ -97,6 +87,24 @@ class EntryPointTests(unittest.TestCase):
         ext = asyncio.run(comfy_entrypoint())
         nodes = asyncio.run(ext.get_node_list())
         self.assertEqual(nodes, [PromptEditor])
+
+    def test_package_entrypoint_loads_with_relative_imports(self):
+        root = Path(__file__).resolve().parents[1]
+        spec = spec_from_file_location(
+            "prompt_editor_package_test",
+            root / "__init__.py",
+            submodule_search_locations=[str(root)],
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = module_from_spec(spec)
+        sys.modules[spec.name] = module
+        try:
+            spec.loader.exec_module(module)
+            self.assertEqual(module.NODE_ID, NODE_ID)
+            self.assertEqual(module.WEB_DIRECTORY, "./web")
+        finally:
+            sys.modules.pop(spec.name, None)
 
 
 if __name__ == "__main__":
