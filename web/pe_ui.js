@@ -2,7 +2,8 @@ import { app } from "../../scripts/app.js";
 
 const NODE_ID = "XAI_PromptEditor";
 const EXTENSION_NAME = "xAI.PromptEditor";
-const CSS_ID = "xai-prompt-editor-css";
+const CSS_ID = "xai-prompt-editor-css-v4";
+const UI_REV = 4;
 
 const VIEW = {
   CURRENT: "CURRENT",
@@ -16,9 +17,9 @@ function injectCss() {
   link.id = CSS_ID;
   link.rel = "stylesheet";
   try {
-    link.href = new URL("./prompt_editor.css", import.meta.url).href;
+    link.href = new URL("./prompt_editor.css", import.meta.url).href + "?v=4";
   } catch {
-    link.href = new URL("prompt_editor.css", import.meta.url).href;
+    link.href = new URL("prompt_editor.css", import.meta.url).href + "?v=4";
   }
   document.head.appendChild(link);
 }
@@ -98,15 +99,64 @@ function isTextConnected(node) {
 }
 
 function isClipboardFilePathJunk(text) {
-  const t = String(text || "").trim();
+  const t = String(text || "")
+    .replace(/^\uFEFF/, "")
+    .replace(/^['"]|['"]$/g, "")
+    .trim();
   if (!t) return true;
   if (/ScreenClip/i.test(t)) return true;
   if (/[\\/]TempState[\\/]/i.test(t)) return true;
   if (/MicrosoftWindows\.Client/i.test(t)) return true;
+  if (/\{[0-9A-Fa-f-]{36}\}/.test(t) && /\.png/i.test(t)) return true;
   if (/^[a-zA-Z]:[\\/].+\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(t)) return true;
   if (/^file:\/\/.+\.(png|jpe?g|gif|webp|bmp)/i.test(t)) return true;
   if (/^\/.+\.(png|jpe?g|gif|webp|bmp)$/i.test(t) && t.indexOf(" ") < 0) return true;
   return false;
+}
+
+function htmlToPlain(html) {
+  if (!html) return "";
+  try {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return (doc.body?.textContent || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function pickClipboardText(plain, html) {
+  if (plain && !isClipboardFilePathJunk(plain)) return plain;
+  const fromHtml = htmlToPlain(html);
+  if (fromHtml && !isClipboardFilePathJunk(fromHtml)) return fromHtml;
+  return null;
+}
+
+function readOsClipboardViaCapture() {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      document.removeEventListener("paste", onPaste, true);
+      resolve(value);
+    };
+    const onPaste = (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const plain = e.clipboardData?.getData("text/plain") || "";
+      const html = e.clipboardData?.getData("text/html") || "";
+      finish(pickClipboardText(plain, html));
+    };
+    document.addEventListener("paste", onPaste, true);
+    let ok = false;
+    try {
+      ok = document.execCommand("paste");
+    } catch {
+      ok = false;
+    }
+    if (!ok) finish(null);
+    else window.setTimeout(() => finish(null), 80);
+  });
 }
 
 async function readClipboardPlainText() {
@@ -114,10 +164,16 @@ async function readClipboardPlainText() {
     if (navigator.clipboard?.read) {
       const items = await navigator.clipboard.read();
       for (const item of items) {
-        if (!item.types?.includes("text/plain")) continue;
-        const blob = await item.getType("text/plain");
-        const text = await blob.text();
-        if (!isClipboardFilePathJunk(text)) return text;
+        let plain = "";
+        let html = "";
+        if (item.types?.includes("text/plain")) {
+          plain = await (await item.getType("text/plain")).text();
+        }
+        if (item.types?.includes("text/html")) {
+          html = await (await item.getType("text/html")).text();
+        }
+        const picked = pickClipboardText(plain, html);
+        if (picked) return picked;
       }
     }
   } catch {
@@ -125,8 +181,8 @@ async function readClipboardPlainText() {
   }
   try {
     if (navigator.clipboard?.readText) {
-      const text = await navigator.clipboard.readText();
-      if (text != null && !isClipboardFilePathJunk(text)) return text;
+      const picked = pickClipboardText(await navigator.clipboard.readText(), "");
+      if (picked) return picked;
     }
   } catch {
     /* none */
@@ -829,21 +885,29 @@ class PromptEditorController {
 
   _onEditorPaste(e) {
     e.stopPropagation();
-    const text = e.clipboardData?.getData("text/plain") ?? "";
-    if (isClipboardFilePathJunk(text)) {
+    const plain = e.clipboardData?.getData("text/plain") ?? "";
+    const html = e.clipboardData?.getData("text/html") ?? "";
+    const text = pickClipboardText(plain, html);
+    if (!text) {
       e.preventDefault();
+      return;
+    }
+    if (text !== plain) {
+      e.preventDefault();
+      if (this.isEditable()) this._applyEditorText(text);
     }
   }
 
   async pasteReplace(opts = {}) {
     if (!this.isEditable()) return;
-    const text = await readClipboardPlainText();
-    if (text == null) {
+    let text = await readClipboardPlainText();
+    if (!text) text = await readOsClipboardViaCapture();
+    if (!text) {
       this.btnPaste.textContent = "No text";
       if (this.pasteTimer) window.clearTimeout(this.pasteTimer);
       this.pasteTimer = window.setTimeout(() => {
         this.btnPaste.textContent = "Paste";
-      }, 1200);
+      }, 1400);
       return;
     }
     this._applyEditorText(text, { append: !!opts.append });
@@ -1039,8 +1103,9 @@ app.registerExtension({
   },
   async nodeCreated(node) {
     if (!isPromptEditorNode(node)) return;
-    if (node.__xaiPromptEditor) return;
+    if (node.__xaiPeRev === UI_REV && node.__xaiPromptEditor) return;
     node.__xaiPromptEditor = new PromptEditorController(node);
+    node.__xaiPeRev = UI_REV;
   },
   loadedGraphNode(node) {
     const ctl = node?.__xaiPromptEditor;
